@@ -48,6 +48,26 @@ html, body {
   outline: none;
 }
 
+/* --- КНОПКА ВЫХОДА ИЗ ДЕМО --- */
+.btn-exit-demo {
+  display: inline-block;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-primary);
+  text-decoration: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.btn-exit-demo:hover {
+  background: #eff6ff;
+  border-color: var(--color-primary);
+}
+
 /* --- ПРАВАЯ ПАНЕЛЬ (ACCORDION) --- */
 #ui-panel {
   position: absolute;
