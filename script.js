@@ -350,7 +350,7 @@ window.addEventListener('resize', onWindowResize);
 onWindowResize();
 
 
-/* --- МОДУЛЬ "УМНАЯ ЛИНЕЙКА V2" (AUTO-DETECT) --- */
+/* --- МОДУЛЬ "УМНАЯ ЛИНЕЙКА V3" (IGNORE A4 ZONE) --- */
 (function initMeasureTool() {
     const modal = document.getElementById('measure-modal');
     const btnOpen = document.getElementById('btn-measure-tool');
@@ -358,80 +358,74 @@ onWindowResize();
     const fileInput = document.getElementById('image-upload');
     const typeSelect = document.getElementById('clothing-type-selector');
     
-    // Элементы шага Canvas
     const canvas = document.getElementById('measure-canvas');
     const ctx = canvas.getContext('2d');
     const instrBadge = document.getElementById('instruction-badge');
     const scanFooter = document.getElementById('scan-footer');
     const scanVal = document.getElementById('scan-val');
     
-    // Кнопки
     const btnAuto = document.getElementById('btn-auto-detect');
     const btnSkip = document.getElementById('btn-skip-step');
     const btnUndo = document.getElementById('btn-undo');
     const btnConfirm = document.getElementById('btn-confirm-step');
 
-    let img = new Image();
-    let imgData = null; // Для анализа пикселей
-
+    // Toast уведомления
     const toast = document.createElement('div');
     toast.id = 'toast-notification';
-    document.querySelector('.modal-content').appendChild(toast);
+    if(document.querySelector('.modal-content')) document.querySelector('.modal-content').appendChild(toast);
 
     function showToast(message, type = 'success') {
         const icon = type === 'success' ? '✅' : '⚠️';
         toast.innerHTML = `<span>$${icon}</span> $${message}`;
         toast.classList.add('show');
-        
-        // Скрываем через 2 секунды
-        setTimeout(() => {
-            toast.classList.remove('show');
-        }, 2500);
+        setTimeout(() => toast.classList.remove('show'), 2500);
     }
+
+    let img = new Image();
+    let imgData = null;
     
-    // Состояние
-    let scaleFactor = 0; // px_per_cm
+    let scaleFactor = 0; 
     let clicks = [];
     let currentStepIndex = 0;
     
-    // Сценарий замеров (очередь)
+    // ХРАНИЛИЩЕ ДЛЯ A4 (Запретная зона)
+    let a4Zone = { minX: 0, maxX: 0, minY: 0, maxY: 0, active: false };
+
     const SCENARIOS = {
         top: [
-            { id: 'a4',    name: 'A4 (Длинная сторона)', color: '#ff4444' }, // Красный
-            { id: 'chest', name: 'Ширина ГРУДИ',         color: '#007bff' }, // Синий
-            { id: 'waist', name: 'Ширина ТАЛИИ',         color: '#28a745' }, // Зеленый
-            { id: 'hips',  name: 'Ширина БЕДЕР (Низ)',   color: '#ffc107' }  // Желтый
+            { id: 'a4',    name: 'Калибровка (Клик 4 угла A4)', color: '#ff4444', count: 4 }, // Требуем 4 клика
+            { id: 'chest', name: 'Ширина ГРУДИ',         color: '#007bff', count: 2 },
+            { id: 'waist', name: 'Ширина ТАЛИИ',         color: '#28a745', count: 2 },
+            { id: 'hips',  name: 'Ширина НИЗА (Бедра)',  color: '#ffc107', count: 2 }
         ],
         bottom: [
-            { id: 'a4',    name: 'A4 (Масштаб)',         color: '#ff4444' },
-            { id: 'waist', name: 'Ширина ПОЯСА',         color: '#28a745' },
-            { id: 'hips',  name: 'Ширина БЕДЕР',         color: '#ffc107' },
-            { id: 'leg',   name: 'Ширина ШТАНИНЫ',       color: '#17a2b8' }
-        ],
-        dress: [/* ... аналогично ... */]
+            { id: 'a4',    name: 'Калибровка (Клик 4 угла A4)', color: '#ff4444', count: 4 },
+            { id: 'waist', name: 'Ширина ПОЯСА',         color: '#28a745', count: 2 },
+            { id: 'hips',  name: 'Ширина БЕДЕР',         color: '#ffc107', count: 2 },
+            { id: 'leg',   name: 'Ширина ШТАНИНЫ',       color: '#17a2b8', count: 2 }
+        ]
     };
-    if(!SCENARIOS.dress) SCENARIOS.dress = SCENARIOS.top; // Копия
+    // Если платье, копируем верх
+    SCENARIOS.dress = SCENARIOS.top;
 
     let activeQueue = [];
 
     // --- ОТКРЫТИЕ ---
     btnOpen.onclick = () => { 
-        modal.style.display = 'flex'; 
+        modal.display = 'flex'; // Fix: modal is DOM element
+        document.getElementById('measure-modal').style.display = 'flex';
         document.getElementById('step-upload').style.display = 'flex';
         document.getElementById('step-canvas').style.display = 'none';
         fileInput.value = "";
     };
-    btnClose.onclick = () => { modal.style.display = 'none'; };
+    btnClose.onclick = () => { document.getElementById('measure-modal').style.display = 'none'; };
 
-    // --- ЗАГРУЗКА ---
     fileInput.onchange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
         reader.onload = (evt) => {
-            img.onload = () => {
-                startSession();
-            };
+            img.onload = () => startSession();
             img.src = evt.target.result;
         };
         reader.readAsDataURL(file);
@@ -441,28 +435,25 @@ onWindowResize();
         document.getElementById('step-upload').style.display = 'none';
         document.getElementById('step-canvas').style.display = 'block';
         
-        // Определяем очередь шагов
         const type = typeSelect.value;
         activeQueue = [...SCENARIOS[type]]; 
         currentStepIndex = 0;
         scaleFactor = 0;
+        a4Zone.active = false; // Сброс зоны A4
 
-        // Подгонка канваса
         const maxWidth = 800;
         const ratio = maxWidth / img.width;
         canvas.width = maxWidth;
         canvas.height = img.height * ratio;
         
-        // Рисуем в буфер для анализа
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         try {
             imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        } catch(e) { console.warn("CORS issue with image analysis"); }
+        } catch(e) { console.warn("CORS"); }
 
         updateUI();
     }
 
-    // --- РИСОВАНИЕ ---
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -470,36 +461,55 @@ onWindowResize();
         const step = activeQueue[currentStepIndex];
         const color = step ? step.color : 'white';
 
-        // Рисуем точки
-        ctx.lineWidth = 3;
-        
-        clicks.forEach((p, i) => {
-            // Точка
-            ctx.fillStyle = color;
-            ctx.beginPath(); 
-            ctx.arc(p.x, p.y, 6, 0, Math.PI*2); 
+        // Если это ШАГ 1 (A4), рисуем полигон
+        if (currentStepIndex === 0 && clicks.length > 0) {
+            ctx.fillStyle = "rgba(255, 68, 68, 0.3)"; // Полупрозрачный красный
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            
+            ctx.beginPath();
+            ctx.moveTo(clicks[0].x, clicks[0].y);
+            for(let i=1; i<clicks.length; i++) ctx.lineTo(clicks[i].x, clicks[i].y);
+            if (clicks.length === 4) ctx.closePath(); // Замыкаем, если все точки есть
             ctx.fill();
-            // Обводка для контраста
-            ctx.strokeStyle = 'white';
-            ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI*2); ctx.stroke();
+            ctx.stroke();
+        }
 
-            // Линия между точками
-            if (i > 0) {
-                ctx.strokeStyle = color;
-                ctx.beginPath();
-                ctx.moveTo(clicks[i-1].x, clicks[i-1].y);
-                ctx.lineTo(p.x, p.y);
-                ctx.stroke();
-            }
+        // Если есть сохраненная зона A4 (мы уже прошли 1 шаг), рисуем её серенькой
+        if (a4Zone.active && currentStepIndex > 0) {
+             ctx.strokeStyle = "rgba(255, 0, 0, 0.3)";
+             ctx.lineWidth = 1;
+             ctx.strokeRect(a4Zone.minX, a4Zone.minY, a4Zone.maxX - a4Zone.minX, a4Zone.maxY - a4Zone.minY);
+             // Штриховка "NO ENTRY"
+             ctx.fillStyle = "rgba(0,0,0,0.5)";
+             ctx.font = "12px Arial";
+             ctx.fillText("IGNORE A4", a4Zone.minX + 5, a4Zone.minY + 15);
+        }
+
+        // Рисуем точки текущего шага
+        clicks.forEach((p) => {
+            ctx.fillStyle = color;
+            ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = 'white'; ctx.lineWidth=2; ctx.stroke();
         });
+        
+        // Линия между точками (только для шагов > 0, где 2 точки)
+        if (currentStepIndex > 0 && clicks.length === 2) {
+            ctx.strokeStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(clicks[0].x, clicks[0].y);
+            ctx.lineTo(clicks[1].x, clicks[1].y);
+            ctx.stroke();
+        }
     }
 
-    // --- КЛИКИ ---
     canvas.onclick = (e) => {
-        if (clicks.length >= 2) return; // Больше 2 точек не надо
+        const step = activeQueue[currentStepIndex];
+        const maxClicks = step.count;
+
+        if (clicks.length >= maxClicks) return;
 
         const rect = canvas.getBoundingClientRect();
-        // Учет масштабирования CSS
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
 
@@ -513,122 +523,40 @@ onWindowResize();
     };
 
     btnUndo.onclick = () => { clicks.pop(); draw(); checkResult(); };
-    
     btnSkip.onclick = () => { nextStep(); };
-
-    btnConfirm.onclick = () => {
-        applyMeasurement();
-        nextStep();
-    };
-
-    btnAuto.onclick = () => {
-        if (!imgData) return showToast("Картинка не проанализирована", "error");
-
-        // 1. Визуальный эффект "Думаю..."
-        const btnText = btnAuto.innerText;
-        btnAuto.innerText = "Ищу края...";
-        btnAuto.classList.add("spinning"); // Добавляем CSS спиннер
-        btnAuto.disabled = true;
-
-        // Делаем задержку 600мс, чтобы пользователь увидел процесс
-        setTimeout(() => {
-            try {
-                runAutoDetect();
-            } catch (e) {
-                console.error(e);
-                showToast("Ошибка алгоритма", "error");
-            } finally {
-                // Возвращаем кнопку в исходное состояние
-                btnAuto.innerText = btnText;
-                btnAuto.classList.remove("spinning");
-                btnAuto.disabled = false;
-            }
-        }, 600); // 600мс задержки
-    };
-
-    // Сама математика вынесена в отдельную функцию
-    function runAutoDetect() {
-        const w = canvas.width;
-        const h = canvas.height;
-        const step = activeQueue[currentStepIndex];
-
-        // Координата Y
-        let scanY = Math.floor(h * 0.5); 
-        if (step.id === 'chest') scanY = Math.floor(h * 0.35);
-        else if (step.id === 'waist') scanY = Math.floor(h * 0.55);
-        else if (step.id === 'hips')  scanY = Math.floor(h * 0.75);
-        else if (step.id === 'a4') scanY = Math.floor(h * 0.5);
-
-        const getBrightness = (x, y) => {
-            const i = (y * w + x) * 4;
-            return (imgData.data[i] + imgData.data[i+1] + imgData.data[i+2]) / 3;
-        };
-
-        const bgLeft = getBrightness(5, scanY);
-        const bgRight = getBrightness(w - 5, scanY);
-        const threshold = 20; // Чувствительность
-
-        let leftX = 20;
-        let rightX = w - 20;
-        let foundLeft = false;
-        let foundRight = false;
-
-        // Поиск слева
-        for (let x = 10; x < w / 2; x++) {
-            if (Math.abs(getBrightness(x, scanY) - bgLeft) > threshold) {
-                leftX = x;
-                foundLeft = true;
-                break;
-            }
-        }
-        // Поиск справа
-        for (let x = w - 10; x > w / 2; x--) {
-            if (Math.abs(getBrightness(x, scanY) - bgRight) > threshold) {
-                rightX = x;
-                foundRight = true;
-                break;
-            }
-        }
-
-        // --- ДИАГНОСТИКА И РЕЗУЛЬТАТ ---
-        if (foundLeft && foundRight) {
-            // Успех!
-            clicks = [ { x: leftX, y: scanY }, { x: rightX, y: scanY } ];
-            draw();
-            checkResult();
-            
-            // Считаем разницу, чтобы показать в уведомлении
-            const distPx = rightX - leftX;
-            showToast(`Края найдены! Ширина: $${distPx}px`, "success");
-        } 
-        else {
-            // Неудача
-            showToast("Контраст не найден. Укажите вручную.", "error");
-            
-            // На всякий случай ставим дефолт
-            clicks = [ { x: w*0.3, y: scanY }, { x: w*0.7, y: scanY } ];
-            draw();
-            checkResult();
-        }
-    }
-
-
+    btnConfirm.onclick = () => { applyMeasurement(); nextStep(); };
 
     function checkResult() {
-        if (clicks.length === 2) {
-            const dist = Math.hypot(clicks[1].x - clicks[0].x, clicks[1].y - clicks[0].y);
+        const step = activeQueue[currentStepIndex];
+        if (clicks.length === step.count) {
+            
             let valCm = 0;
 
-            if (currentStepIndex === 0) {
-                // Это калибровка (A4 = 29.7 см)
-                valCm = 29.7;
-            } else {
-                // Измерение
-                if (scaleFactor === 0) return; // Ошибка
-                valCm = (dist / scaleFactor) * 2; // *2 для обхвата
+            if (step.id === 'a4') {
+                // КАЛИБРОВКА ПО 4 ТОЧКАМ
+                // Ищем самую длинную сторону четырехугольника
+                // (Это позволяет класть лист хоть боком, хоть вертикально)
+                let maxDist = 0;
+                for (let i = 0; i < clicks.length; i++) {
+                    const p1 = clicks[i];
+                    const p2 = clicks[(i + 1) % clicks.length]; // следующая точка (циклично)
+                    const d = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+                    if (d > maxDist) maxDist = d;
+                }
+                
+                // Считаем масштаб (Длинная сторона A4 = 29.7 см)
+                // Мы временно сохраняем его, но примерим только по кнопке "Далее"
+                valCm = 29.7; 
+                scanVal.innerText = "29.7 (A4)";
+            } 
+            else {
+                // ОБЫЧНЫЙ ЗАМЕР
+                const dist = Math.hypot(clicks[1].x - clicks[0].x, clicks[1].y - clicks[0].y);
+                if (scaleFactor === 0) return;
+                valCm = (dist / scaleFactor) * 2;
+                scanVal.innerText = Math.round(valCm);
             }
-
-            scanVal.innerText = Math.round(valCm);
+            
             scanFooter.style.visibility = 'visible';
         } else {
             scanFooter.style.visibility = 'hidden';
@@ -637,21 +565,41 @@ onWindowResize();
 
     function applyMeasurement() {
         const step = activeQueue[currentStepIndex];
-        const val = parseInt(scanVal.innerText);
-
+        
         if (step.id === 'a4') {
-            // Сохраняем масштаб
-            const distPx = Math.hypot(clicks[1].x - clicks[0].x, clicks[1].y - clicks[0].y);
-            scaleFactor = distPx / 29.7;
-            console.log("Масштаб установлен:", scaleFactor);
+            // 1. Вычисляем МАСШТАБ
+            let maxDist = 0;
+            const xs = [], ys = [];
+            
+            for (let i = 0; i < clicks.length; i++) {
+                // Для масштаба
+                const p1 = clicks[i];
+                const p2 = clicks[(i + 1) % clicks.length];
+                const d = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+                if (d > maxDist) maxDist = d;
+                
+                // Для Bounding Box
+                xs.push(p1.x); ys.push(p1.y);
+            }
+            scaleFactor = maxDist / 29.7;
+
+            // 2. Создаем ЗАПРЕТНУЮ ЗОНУ (A4 Box)
+            a4Zone = {
+                minX: Math.min(...xs),
+                maxX: Math.max(...xs),
+                minY: Math.min(...ys),
+                maxY: Math.max(...ys),
+                active: true
+            };
+            console.log("A4 Zone set:", a4Zone);
         } 
         else {
-            // Применяем к ползунку
-            const input = inputs.cloth[step.id]; // Получаем пару {range, num}
-            if (input && input.num) {
-                input.num.value = val;
-                // Триггерим событие, чтобы обновилось 3D
-                input.num.dispatchEvent(new Event('input'));
+            const val = parseInt(scanVal.innerText);
+            // Есть ли такие инпуты? Бедра (hips) есть и в теле и в одежде, нам нужна Oдежда
+            if (inputs.cloth && inputs.cloth[step.id]) {
+                const input = inputs.cloth[step.id].num;
+                input.value = val;
+                input.dispatchEvent(new Event('input'));
             }
         }
     }
@@ -659,8 +607,8 @@ onWindowResize();
     function nextStep() {
         currentStepIndex++;
         if (currentStepIndex >= activeQueue.length) {
-            alert("Замеры завершены!");
-            modal.style.display = 'none';
+            alert("Готово! Данные перенесены.");
+            document.getElementById('measure-modal').style.display = 'none';
             return;
         }
         updateUI();
@@ -672,14 +620,165 @@ onWindowResize();
         scanFooter.style.visibility = 'hidden';
         
         const step = activeQueue[currentStepIndex];
-        instrBadge.innerText = `📌 Шаг $${currentStepIndex + 1}: $${step.name}`;
-        instrBadge.style.borderLeftColor = step.color;
-        instrBadge.style.color = step.color === '#ffffff' ? '#333' : '#333';
         
-        // Auto кнопка доступна только для одежды, не для A4
+        // Инструкция
+        let text = `📌 Шаг $${currentStepIndex + 1}: $${step.name}`;
+        if (step.id === 'a4') text += " (Кликните 4 угла листа)";
+        instrBadge.innerText = text;
+        
+        instrBadge.style.borderLeftColor = step.color;
+        
+        // Кнопка Авто доступна только если это НЕ а4
         btnAuto.disabled = (step.id === 'a4');
         btnAuto.style.opacity = (step.id === 'a4') ? 0.5 : 1;
     }
+
+
+    // --- УМНЫЙ АВТО-ПОИСК (С ИГНОРОМ ЛИСТА A4) ---
+    btnAuto.onclick = () => {
+        if (!imgData) return showToast("Нет картинки", "error");
+
+        const btnText = btnAuto.innerText;
+        btnAuto.innerText = "Ищу...";
+        btnAuto.classList.add("spinning");
+        
+        setTimeout(() => {
+            try {
+                runAutoDetect();
+            } catch(e) { console.error(e); }
+            finally {
+                btnAuto.innerText = btnText;
+                btnAuto.classList.remove("spinning");
+            }
+        }, 500);
+    };
+
+    // --- АВТО ОПРЕДЕЛЕНИЕ V3 (ПОИСК САМОГО ДЛИННОГО СЕГМЕНТА) ---
+    function runAutoDetect() {
+        const w = canvas.width;
+        const h = canvas.height;
+        const step = activeQueue[currentStepIndex];
+
+        // 1. Высота сканирования
+        let scanY = Math.floor(h * 0.5); 
+        if (step.id === 'chest') scanY = Math.floor(h * 0.35);
+        if (step.id === 'waist') scanY = Math.floor(h * 0.6); // Талия пониже
+        if (step.id === 'hips')  scanY = Math.floor(h * 0.8);
+        if (step.id === 'a4') scanY = Math.floor(h * 0.5);
+
+        // Хелпер: Получить пиксель
+        const getPixel = (x, y) => {
+            const i = (y * w + x) * 4;
+            return { r: imgData.data[i], g: imgData.data[i+1], b: imgData.data[i+2] };
+        };
+        // Хелпер: Разница цветов
+        const getDist = (c1, c2) => Math.sqrt(Math.pow(c1.r-c2.r,2) + Math.pow(c1.g-c2.g,2) + Math.pow(c1.b-c2.b,2));
+
+        // 2. Анализ ФОНА (Среднее по углам и краям)
+        // Берем не только углы, но и точки по центрам сторон для надежности
+        const probes = [
+            getPixel(5, 5), getPixel(w/2, 5), getPixel(w-5, 5),
+            getPixel(5, h/2), getPixel(w-5, h/2),
+            getPixel(5, h-5), getPixel(w/2, h-5), getPixel(w-5, h-5)
+        ];
+        
+        const bg = { r:0, g:0, b:0 };
+        probes.forEach(p => { bg.r+=p.r; bg.g+=p.g; bg.b+=p.b });
+        bg.r /= probes.length; bg.g /= probes.length; bg.b /= probes.length;
+
+        // Порог отличия:
+        // Если футболка белая, а фон черный - разница огромна (>100).
+        // Если футболка серая, а фон белый - разница меньше.
+        // 35 - золотая середина.
+        const THRESHOLD = 35; 
+
+        // 3. СКАНИРОВАНИЕ ВСЕЙ СТРОКИ
+        // Мы строим "карту" строки: false = фон, true = объект
+        let lineMap = new Array(w).fill(false);
+
+        for (let x = 0; x < w; x++) {
+            // Если попали в зону A4 (И она активна на этом шаге) -- считаем фоном
+            if (a4Zone.active && x >= a4Zone.minX && x <= a4Zone.maxX && scanY >= a4Zone.minY && scanY <= a4Zone.maxY) {
+                lineMap[x] = false; 
+                continue;
+            }
+
+            const dist = getDist(getPixel(x, scanY), bg);
+            if (dist > THRESHOLD) {
+                lineMap[x] = true; // Это объект
+            }
+        }
+
+        // 4. ПОИСК САМОГО ДЛИННОГО КУСКА (Longest Sequence)
+        // Это позволяет игнорировать мусор по краям
+        let maxLen = 0;
+        let bestStart = 0;
+        let bestEnd = 0;
+
+        let currentStart = -1;
+        let currentLen = 0;
+
+        // Маленький фильтр "Gap closing" (если 1-2 пикселя пробились как фон внутри футболки - игнорим)
+        // Для простоты не будем усложнять, V3 и так мощная.
+
+        for (let x = 0; x < w; x++) {
+            if (lineMap[x]) {
+                if (currentStart === -1) currentStart = x;
+                currentLen++;
+            } else {
+                if (currentStart !== -1) {
+                    // Кусок закончился. Проверяем, самый ли он большой?
+                    if (currentLen > maxLen) {
+                        maxLen = currentLen;
+                        bestStart = currentStart;
+                        bestEnd = x - 1;
+                    }
+                    currentStart = -1;
+                    currentLen = 0;
+                }
+            }
+        }
+        // Проверка последнего куска (если дошел до края экрана)
+        if (currentStart !== -1 && currentLen > maxLen) {
+            maxLen = currentLen;
+            bestStart = currentStart;
+            bestEnd = w - 1;
+        }
+
+        // --- ВИЗУАЛИЗАЦИЯ ---
+        draw(); 
+        
+        // Рисуем линию скана
+        ctx.beginPath(); ctx.moveTo(0, scanY); ctx.lineTo(w, scanY);
+        ctx.strokeStyle="rgba(255, 255, 0, 0.4)"; ctx.lineWidth=1; ctx.stroke();
+
+        // 5. РЕЗУЛЬТАТ
+        // Считаем валидным, если нашли кусок хотя бы 20 пикселей шириной
+        if (maxLen > 20) {
+            clicks = [{x: bestStart, y: scanY}, {x: bestEnd, y: scanY}];
+            
+            // Рисуем жирную зеленую линию поверх найденного куска
+            ctx.beginPath(); ctx.moveTo(bestStart, scanY); ctx.lineTo(bestEnd, scanY);
+            ctx.strokeStyle="#00ff00"; ctx.lineWidth=3; ctx.stroke();
+
+            // Рисуем точки
+            ctx.fillStyle = activeQueue[currentStepIndex].color;
+            clicks.forEach(p => {
+                ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle="white"; ctx.stroke();
+            });
+
+            checkResult();
+            const cm = Math.round((maxLen / scaleFactor) * 2);
+            showToast(`Найдено! Обхват ~$${cm} см`, "success");
+        } else {
+            // Если ничего похожего на одежду не нашли
+            clicks = [{x: w*0.4, y: scanY}, {x: w*0.6, y: scanY}];
+            draw(); checkResult();
+            showToast("Объект сливается с фоном", "error");
+        }
+    }
+
 
 })();
 
