@@ -4,10 +4,6 @@
   <meta charset="utf-8">
   <title>Визуализатор Посадки</title>
   <link href="style.css" rel="stylesheet" type="text/css" />
-  <style>
-    body { margin: 0; overflow: hidden; font-family: sans-serif; }
-    #canvas-container { width: 100vw; height: 100vh; background: #f0f0f0; }
-  </style>
 </head>
 <body>
   <div id="canvas-container"></div>
@@ -22,25 +18,25 @@
   </div>
 
   <div id="ui-panel">
-    
-    <!-- ВЫБОР ПОЛА -->
-    <div class="control-item">
-      <label style="margin-bottom: 8px; display:block;">Модель / Пол:</label>
+    <div class="control-item" style="margin-bottom: 12px;">
+      <label style="margin-bottom: 6px; display:block;">Модель / Пол</label>
       <select id="gender-select">
         <option value="male">Мужчина</option>
         <option value="female">Женщина</option>
       </select>
     </div>
 
-    <!-- КОЛОНКА 1: ТЕЛО -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px;">
-      <h3 style="margin: 0; border: none;">1. Твоё тело (см)</h3>
-      <button id="btn-body-scan" style="cursor: pointer; background: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px;">
-        📷 Скан тела
-      </button>
-    </div>
-    
-    <!-- Рост -->
+    <!-- Секция 1: ТЕЛО -->
+    <div class="accordion-section expanded" data-accordion="body">
+      <div class="accordion-header">
+        <div class="accordion-toggle">
+          <h3>1. Твоё тело (см)</h3>
+          <span class="accordion-icon">▼</span>
+        </div>
+        <button id="btn-body-scan" class="btn btn-primary" title="Сканировать параметры по фото">📷 Скан</button>
+      </div>
+      <div class="accordion-content">
+        <div class="accordion-inner">
     <div class="control-item">
       <div class="control-header">
         <label>Рост</label>
@@ -93,19 +89,21 @@
       </div>
       <input type="range" id="body-leg" min="40" max="90" value="55">
     </div>
-
-
-    <!-- КОЛОНКА 2: ОДЕЖДА -->
-    <!-- <h3>2. Замеры одежды (см)</h3> -->
-
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; border-bottom: 2px solid #eee; padding-bottom: 5px;">
-      <h3 style="margin: 0; border: none;">2. Одежда (см)</h3>
-      <button id="btn-measure-tool" style="cursor: pointer; background: #007bff; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px;">
-        📷 Скан по фото
-      </button>
+        </div>
+      </div>
     </div>
 
-    
+    <!-- Секция 2: ОДЕЖДА -->
+    <div class="accordion-section expanded" data-accordion="cloth">
+      <div class="accordion-header">
+        <div class="accordion-toggle">
+          <h3>2. Одежда (см)</h3>
+          <span class="accordion-icon">▼</span>
+        </div>
+        <button id="btn-measure-tool" class="btn btn-accent" title="Сканировать одежду по фото">📷 Скан</button>
+      </div>
+      <div class="accordion-content">
+        <div class="accordion-inner">
     <div class="control-item">
       <div class="control-header">
         <label>Ширина в груди</label>
@@ -145,7 +143,9 @@
       </div>
       <input type="range" id="cloth-leg" min="40" max="100" value="60">
     </div>
-
+        </div>
+      </div>
+    </div>
   </div>
 
 
@@ -170,7 +170,7 @@
   <div id="bottom-ui">
     
     <!-- Легенда цвета -->
-    <div class="legend-container">
+    <div class="legend-container" title="Цвет показывает, где посадка тесная или свободная">
       <span class="legend-label">ТЕСНО</span>
       <div class="legend-gradient"></div>
       <span class="legend-label">ШИРОКО</span>
@@ -199,7 +199,7 @@
           <option value="dress">Полный (Платье)</option>
         </select>
       </div>
-      <button id="close-modal" class="icon-btn">✕</button>
+      <button id="close-modal" class="icon-btn" aria-label="Закрыть">✕</button>
     </div>
     
     <!-- Тело -->
@@ -257,7 +257,7 @@
           <input type="number" id="body-scan-height" min="140" max="220" value="175" style="width: 60px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
         </div>
       </div>
-      <button id="close-body-scan" class="icon-btn">✕</button>
+      <button id="close-body-scan" class="icon-btn" aria-label="Закрыть">✕</button>
     </div>
 
     <div class="modal-body">
@@ -337,7 +337,7 @@
               <input type="number" id="body-scan-leg" min="40" max="90" placeholder="—" style="width: 55px;">
             </div>
           </div>
-          <div id="body-scan-calib" style="display: none; flex-direction: column; gap: 8px; padding: 10px; background: #f5f5f5; border-radius: 8px; margin-top: 4px;">
+          <div id="body-scan-calib" class="calib-block" style="display: none; flex-direction: column; gap: 8px; padding: 12px; border-radius: 8px; margin-top: 4px;">
             <span style="font-size: 13px; font-weight: 600;">Калибровка по известному обхвату</span>
             <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
               <span style="font-size: 12px;">Я знаю обхват</span>
@@ -364,6 +364,11 @@
   </div>
 </div>
 
+<!-- Оверлей загрузки при анализе тела -->
+<div id="loading-overlay" class="loading-overlay">
+  <div class="loading-spinner"></div>
+  <span id="loading-text">Анализируем позу...</span>
+</div>
   
 </body>
 </html>
