@@ -452,11 +452,63 @@ select {
   align-items: stretch;
 }
 
+.body-scan-modal-body {
+  overflow-y: auto;
+}
+
 .body-scan-upload-zone {
   flex: 1;
   min-width: 200px;
   min-height: 140px;
   padding: 28px 24px !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.body-scan-zone-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.body-scan-zone-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.body-scan-zone-preview canvas {
+  max-width: 120px;
+  max-height: 180px;
+  width: auto;
+  height: auto;
+  border-radius: 4px;
+  background: #1e293b;
+}
+
+.body-scan-replace-link {
+  font-size: 11px;
+  color: var(--color-primary);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.body-scan-replace-link:hover { opacity: 0.8; }
+
+.body-scan-toolbar {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .measure-upload-zone {
@@ -505,6 +557,37 @@ select {
 #body-scan-side-area {
   min-width: 180px;
 }
+
+.body-scan-tips {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.body-scan-tips-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.body-scan-tips ul {
+  margin: 10px 0 0 0;
+  padding-left: 20px;
+  line-height: 1.6;
+}
+
+.body-scan-tips li { margin-bottom: 4px; }
+
+.body-scan-tips-compact {
+  margin-bottom: 10px;
+}
+
+.body-scan-tips-compact ul { margin-top: 6px; }
+
+.body-scan-tips-compact li { margin-bottom: 0; list-style: none; }
 
 /* --- ЗОНЫ ЗАГРУЗКИ --- */
 .upload-zone {
