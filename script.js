@@ -338,11 +338,17 @@ function animate() {
 }
 animate();
 
-window.addEventListener('resize', () => {
+function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-});
+}
+
+window.addEventListener('resize', onWindowResize);
+
+// ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ (чтобы убрать белые полосы при старте)
+onWindowResize();
+
 
 /* --- МОДУЛЬ "УМНАЯ ЛИНЕЙКА V2" (AUTO-DETECT) --- */
 (function initMeasureTool() {

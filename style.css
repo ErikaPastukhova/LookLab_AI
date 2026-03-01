@@ -1,22 +1,38 @@
-body { 
-  margin: 0; 
-  padding: 0; /* Важно обнулить отступы */
-  overflow: hidden; /* Запрещает скролл самой страницы */
-  font-family: 'Segoe UI', sans-serif; 
-  color: #333; 
-  width: 100vw;
-  height: 100vh;
+/* --- ГЛОБАЛЬНЫЕ СТИЛИ НА ВЕСЬ ЭКРАН --- */
+
+/* 1. Сбрасываем всё у HTML и BODY */
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Запрещаем скролл */
+  font-family: 'Segoe UI', sans-serif;
+  color: #333;
+  position: fixed; /* Фиксируем сам сайт, чтобы не ездил */
 }
 
-#canvas-container { 
-  position: absolute; /* Фиксируем холст */
-  top: 0; left: 0;
-  width: 100%; 
-  height: 100%; 
-  background: #e0e0e0; 
-  z-index: 0; /* Самый нижний слой */
-  display: block; /* Убирает артефакты отступов */
+/* 2. Контейнер для 3D: Прибиваем к 4-м углам */
+#canvas-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  background: #e0e0e0;
 }
+
+/* 3. Холст: Растягиваем принудительно */
+canvas {
+  display: block;
+  width: 100% !important;  /* Перебиваем скрипты Three.js */
+  height: 100% !important; /* Перебиваем скрипты Three.js */
+  outline: none;
+}
+
 
 /* --- ПРАВАЯ ПАНЕЛЬ (НАСТРОЙКИ) --- */
 #ui-panel {
@@ -192,7 +208,21 @@ hr { border: 0; border-top: 1px solid #eee; margin: 20px 0; }
   flex-grow: 1; background: #333; display: flex; justify-content: center; align-items: center;
   border-radius: 8px; overflow: hidden; margin-top: 10px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
 }
-canvas { max-width: 100%; max-height: 60vh; }
+/* Применяем ограничение ТОЛЬКО к линейке */
+#measure-canvas { 
+  max-width: 100%; 
+  max-height: 60vh; 
+  width: 100%;
+  border: 1px solid #ccc;
+  cursor: crosshair;
+}
+
+/* А главному экрану разрешаем быть большим */
+#canvas-container canvas {
+  max-height: none;
+  height: 100% !important;
+}
+
 
 .canvas-toolbar {
   display: flex; justify-content: space-between; align-items: center;
