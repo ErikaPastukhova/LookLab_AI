@@ -33,7 +33,12 @@
     </div>
 
     <!-- КОЛОНКА 1: ТЕЛО -->
-    <h3>1. Твоё тело (см)</h3>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px;">
+      <h3 style="margin: 0; border: none;">1. Твоё тело (см)</h3>
+      <button id="btn-body-scan" style="cursor: pointer; background: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 4px; font-size: 12px;">
+        📷 Скан тела
+      </button>
+    </div>
     
     <!-- Рост -->
     <div class="control-item">
@@ -236,6 +241,125 @@
         </div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- МОДАЛЬНОЕ ОКНО "СКАН ТЕЛА" -->
+<div id="body-scan-modal" class="modal-overlay" style="display: none;">
+  <div class="modal-content large-modal">
+    
+    <div class="modal-header">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap: wrap;">
+        <h4>📷 Скан тела (MediaPipe Pose)</h4>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <label for="body-scan-height" style="font-size: 14px;">Рост (см):</label>
+          <input type="number" id="body-scan-height" min="140" max="220" value="175" style="width: 60px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+        </div>
+      </div>
+      <button id="close-body-scan" class="icon-btn">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <!-- Шаг 1: Загрузка фото человека -->
+      <div id="body-scan-upload" class="step-container">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="upload-zone" style="min-height: 120px;">
+            <span style="font-size: 28px;">📷</span>
+            <p><strong>Фото спереди</strong> (обязательно)</p>
+            <small>Человек стоит прямо, лицом к камере</small>
+            <input type="file" id="body-image-upload" accept="image/*">
+          </div>
+          <div class="upload-zone" style="min-height: 100px; border-style: dashed;">
+            <span style="font-size: 24px;">↔️</span>
+            <p><strong>Фото сбоку</strong> (опционально)</p>
+            <small>Профиль, улучшит точность обхватов</small>
+            <input type="file" id="body-image-side-upload" accept="image/*">
+          </div>
+        </div>
+      </div>
+
+      <!-- Шаг 2: Просмотр и результат -->
+      <div id="body-scan-canvas-step" class="step-container" style="display: none;">
+        <div class="canvas-toolbar">
+          <div id="body-scan-instruction" class="instruction-badge">
+            📌 Загрузите фото и нажмите кнопку
+          </div>
+          <div class="toolbar-actions">
+            <button id="btn-body-compute" class="primary-btn" style="padding: 8px 20px;">Вычислить параметры</button>
+            <button id="btn-body-rescan" class="secondary-btn">Повторить анализ</button>
+          </div>
+        </div>
+
+        <div class="canvas-wrapper" style="flex-direction: column; gap: 8px;">
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: flex-start;">
+            <div>
+              <div style="font-size: 11px; color: #888; margin-bottom: 4px;">Спереди</div>
+              <canvas id="body-scan-canvas"></canvas>
+            </div>
+            <div id="body-scan-side-area" style="min-width: 120px;">
+              <div style="font-size: 11px; color: #888; margin-bottom: 4px;">Сбоку</div>
+              <div id="body-scan-side-preview" style="display: none;">
+                <canvas id="body-scan-canvas-side"></canvas>
+                <label for="body-image-side-upload-canvas" style="font-size: 11px; color: #007bff; cursor: pointer; margin-top: 4px; display: block;">↻ Заменить</label>
+              </div>
+              <label id="body-scan-side-upload" for="body-image-side-upload-canvas" class="upload-zone" style="min-height: 80px; padding: 12px; font-size: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <span style="font-size: 20px;">↔️</span>
+                <p style="margin: 4px 0;">Добавить фото сбоку</p>
+                <small style="color: #888;">улучшит точность</small>
+              </label>
+              <input type="file" id="body-image-side-upload-canvas" accept="image/*" style="position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none;">
+            </div>
+          </div>
+        </div>
+
+        <div id="body-scan-footer" style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
+          <span id="body-scan-summary" style="font-size: 13px; color: #555;"></span>
+          <div id="body-scan-params" style="display: none; flex-direction: row; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end;">
+            <div style="display: flex; align-items: center; gap: 6px; margin: 0;">
+              <label style="min-width: 50px; margin: 0;">Грудь</label>
+              <input type="number" id="body-scan-chest" min="70" max="160" placeholder="—" style="width: 55px;">
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; margin: 0;">
+              <label style="min-width: 50px; margin: 0;">Талия</label>
+              <input type="number" id="body-scan-waist" min="50" max="160" placeholder="—" style="width: 55px;">
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; margin: 0;">
+              <label style="min-width: 50px; margin: 0;">Бёдра</label>
+              <input type="number" id="body-scan-hips" min="70" max="160" placeholder="—" style="width: 55px;">
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; margin: 0;">
+              <label style="min-width: 50px; margin: 0;">Бицепс</label>
+              <input type="number" id="body-scan-arm" min="20" max="60" placeholder="—" style="width: 55px;">
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; margin: 0;">
+              <label style="min-width: 50px; margin: 0;">Нога</label>
+              <input type="number" id="body-scan-leg" min="40" max="90" placeholder="—" style="width: 55px;">
+            </div>
+          </div>
+          <div id="body-scan-calib" style="display: none; flex-direction: column; gap: 8px; padding: 10px; background: #f5f5f5; border-radius: 8px; margin-top: 4px;">
+            <span style="font-size: 13px; font-weight: 600;">Калибровка по известному обхвату</span>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+              <span style="font-size: 12px;">Я знаю обхват</span>
+              <select id="body-scan-calib-which" style="padding: 4px 8px; font-size: 13px;">
+                <option value="chest">груди</option>
+                <option value="waist">талии</option>
+                <option value="hips">бёдер</option>
+                <option value="arm">бицепса</option>
+                <option value="leg">ноги</option>
+              </select>
+              <span style="font-size: 12px;">=</span>
+              <input type="number" id="body-scan-calib-value" placeholder="см" min="20" max="200" style="width: 60px; padding: 4px 8px;">
+              <span style="font-size: 12px;">см</span>
+              <button id="btn-body-scan-calib" class="secondary-btn" style="padding: 4px 12px;">Применить</button>
+            </div>
+          </div>
+          <span style="font-size: 12px; color: #888;">Скорректируйте значения при необходимости, затем нажмите «Готово».</span>
+          <button id="btn-body-scan-done" class="primary-btn" style="margin-top: 4px; display: none; align-self: flex-start;">
+            Готово
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
