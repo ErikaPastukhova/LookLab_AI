@@ -48,24 +48,52 @@ html, body {
   outline: none;
 }
 
-/* --- КНОПКА ВЫХОДА ИЗ ДЕМО --- */
+/* --- ЛЕВАЯ ПАНЕЛЬ --- */
+#left-panel {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 300px;
+  max-height: 95vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 100;
+}
+
 .btn-exit-demo {
   display: inline-block;
+  align-self: flex-start;
   padding: 8px 12px;
-  margin-bottom: 12px;
   font-size: 13px;
   font-weight: 500;
   color: var(--color-primary);
   text-decoration: none;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  background: rgba(255, 255, 255, 0.97);
   transition: background 0.2s, border-color 0.2s;
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(12px);
 }
 
 .btn-exit-demo:hover {
   background: #eff6ff;
   border-color: var(--color-primary);
+}
+
+/* --- ДИСКЛЕЙМЕР (внутри левой панели) --- */
+#left-panel #disclaimer-box {
+  position: static;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+#left-panel .accordion-section {
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(12px);
 }
 
 /* --- ПРАВАЯ ПАНЕЛЬ (ACCORDION) --- */
@@ -339,11 +367,8 @@ select {
   background: #f1f5f9;
 }
 
-/* --- ДИСКЛЕЙМЕР --- */
+/* --- ДИСКЛЕЙМЕР (fallback для старых селекторов) --- */
 #disclaimer-box {
-  position: absolute;
-  top: 20px;
-  left: 20px;
   max-width: 280px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
@@ -415,6 +440,70 @@ select {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+}
+
+/* --- СКАН ТЕЛА: загрузка и превью --- */
+.body-scan-upload-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: flex-start;
+  align-items: stretch;
+}
+
+.body-scan-upload-zone {
+  flex: 1;
+  min-width: 200px;
+  min-height: 140px;
+  padding: 28px 24px !important;
+}
+
+.measure-upload-zone {
+  min-height: 140px;
+  padding: 28px 24px !important;
+}
+
+.body-scan-canvas-row {
+  flex-direction: row !important;
+}
+
+.body-scan-preview-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 16px;
+  width: 100%;
+}
+
+.body-scan-preview-box {
+  padding: 16px 20px;
+  background: #2d3748;
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.body-scan-preview-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.body-scan-side-upload {
+  min-height: 100px !important;
+  padding: 24px 20px !important;
+  font-size: 13px;
+}
+
+#body-scan-side-area {
+  min-width: 180px;
 }
 
 /* --- ЗОНЫ ЗАГРУЗКИ --- */
@@ -595,6 +684,12 @@ select {
 
 /* --- МОБИЛЬНАЯ АДАПТАЦИЯ --- */
 @media (max-width: 768px) {
+  #left-panel {
+    width: calc(100% - 20px);
+    max-width: 340px;
+    left: 10px;
+  }
+
   #ui-panel {
     width: calc(100% - 20px);
     max-width: 340px;
@@ -602,9 +697,6 @@ select {
   }
 
   #disclaimer-box {
-    top: 10px;
-    left: 10px;
-    right: 10px;
     max-width: none;
     font-size: 12px;
   }

@@ -7,18 +7,71 @@
 </head>
 <body>
   <div id="canvas-container"></div>
-  <!-- ДИСКЛЕЙМЕР (В левом верхнем углу) -->
-  <div id="disclaimer-box">
-    <div class="disclaimer-icon">ℹ️</div>
-    <div class="disclaimer-content">
-      <strong>Важно:</strong> Визуальная форма 3D-модели является приблизительной.
-      <br>
-      Однако <strong>цветовая карта (Heatmap)</strong> рассчитывается математически точно на основе введенных вами цифр.
+
+  <!-- ЛЕВАЯ ПАНЕЛЬ: кнопка выхода, дисклеймер, одежда -->
+  <div id="left-panel">
+    <a href="index.html" class="btn-exit-demo">← На главную</a>
+    <div id="disclaimer-box">
+      <div class="disclaimer-icon">ℹ️</div>
+      <div class="disclaimer-content">
+        <strong>Важно:</strong> Визуальная форма 3D-модели является приблизительной.
+        <br>
+        Однако <strong>цветовая карта (Heatmap)</strong> рассчитывается математически точно на основе введенных вами цифр.
+      </div>
+    </div>
+    <!-- Секция ОДЕЖДА -->
+    <div class="accordion-section expanded" data-accordion="cloth">
+      <div class="accordion-header">
+        <div class="accordion-toggle">
+          <h3>Одежда (см)</h3>
+          <span class="accordion-icon">▼</span>
+        </div>
+        <button id="btn-measure-tool" class="btn btn-accent" title="Сканировать одежду по фото">📷 Скан</button>
+      </div>
+      <div class="accordion-content">
+        <div class="accordion-inner">
+    <div class="control-item">
+      <div class="control-header">
+        <label>Ширина в груди</label>
+        <input type="number" id="num-cloth-chest" min="70" max="170" value="105">
+      </div>
+      <input type="range" id="cloth-chest" min="70" max="170" value="105">
+    </div>
+    <div class="control-item">
+      <div class="control-header">
+        <label>Ширина в талии</label>
+        <input type="number" id="num-cloth-waist" min="50" max="170" value="95">
+      </div>
+      <input type="range" id="cloth-waist" min="50" max="170" value="95">
+    </div>
+    <div class="control-item">
+      <div class="control-header">
+        <label>Ширина в бедрах</label>
+        <input type="number" id="num-cloth-hips" min="70" max="170" value="105">
+      </div>
+      <input type="range" id="cloth-hips" min="70" max="170" value="105">
+    </div>
+    <div class="control-item">
+      <div class="control-header">
+        <label>Ширина рукава</label>
+        <input type="number" id="num-cloth-arm" min="20" max="70" value="38">
+      </div>
+      <input type="range" id="cloth-arm" min="20" max="70" value="38">
+    </div>
+    <div class="control-item">
+      <div class="control-header">
+        <label>Ширина штанины</label>
+        <input type="number" id="num-cloth-leg" min="40" max="100" value="60">
+      </div>
+      <input type="range" id="cloth-leg" min="40" max="100" value="60">
+    </div>
+        </div>
+      </div>
     </div>
   </div>
 
+  <!-- ПРАВАЯ ПАНЕЛЬ: модель, тело -->
   <div id="ui-panel">
-    <a href="index.html" class="btn-exit-demo">← На главную</a>
     <div class="control-item" style="margin-bottom: 12px;">
       <label style="margin-bottom: 6px; display:block;">Модель / Пол</label>
       <select id="gender-select">
@@ -26,12 +79,11 @@
         <option value="female">Женщина</option>
       </select>
     </div>
-
-    <!-- Секция 1: ТЕЛО -->
+    <!-- Секция ТЕЛО -->
     <div class="accordion-section expanded" data-accordion="body">
       <div class="accordion-header">
         <div class="accordion-toggle">
-          <h3>1. Твоё тело (см)</h3>
+          <h3>Твоё тело (см)</h3>
           <span class="accordion-icon">▼</span>
         </div>
         <button id="btn-body-scan" class="btn btn-primary" title="Сканировать параметры по фото">📷 Скан</button>
@@ -93,60 +145,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Секция 2: ОДЕЖДА -->
-    <div class="accordion-section expanded" data-accordion="cloth">
-      <div class="accordion-header">
-        <div class="accordion-toggle">
-          <h3>2. Одежда (см)</h3>
-          <span class="accordion-icon">▼</span>
-        </div>
-        <button id="btn-measure-tool" class="btn btn-accent" title="Сканировать одежду по фото">📷 Скан</button>
-      </div>
-      <div class="accordion-content">
-        <div class="accordion-inner">
-    <div class="control-item">
-      <div class="control-header">
-        <label>Ширина в груди</label>
-        <input type="number" id="num-cloth-chest" min="70" max="170" value="105">
-      </div>
-      <input type="range" id="cloth-chest" min="70" max="170" value="105">
-    </div>
-
-    <div class="control-item">
-      <div class="control-header">
-        <label>Ширина в талии</label>
-        <input type="number" id="num-cloth-waist" min="50" max="170" value="95">
-      </div>
-      <input type="range" id="cloth-waist" min="50" max="170" value="95">
-    </div>
-
-    <div class="control-item">
-      <div class="control-header">
-        <label>Ширина в бедрах</label>
-        <input type="number" id="num-cloth-hips" min="70" max="170" value="105">
-      </div>
-      <input type="range" id="cloth-hips" min="70" max="170" value="105">
-    </div>
-
-    <div class="control-item">
-      <div class="control-header">
-        <label>Ширина рукава</label>
-        <input type="number" id="num-cloth-arm" min="20" max="70" value="38">
-      </div>
-      <input type="range" id="cloth-arm" min="20" max="70" value="38">
-    </div>
-
-    <div class="control-item">
-      <div class="control-header">
-        <label>Ширина штанины</label>
-        <input type="number" id="num-cloth-leg" min="40" max="100" value="60">
-      </div>
-      <input type="range" id="cloth-leg" min="40" max="100" value="60">
-    </div>
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- КАРТА ИМПОРТОВ (Важно для локальной работы без npm) -->
@@ -202,7 +200,7 @@
       
       <!-- Шаг 1: Загрузка -->
       <div id="step-upload" class="step-container">
-        <div class="upload-zone">
+        <div class="upload-zone measure-upload-zone">
           <span style="font-size: 40px;">📷</span>
           <p>Перетащите фото сюда или кликните</p>
           <small>Положите рядом лист А4 или карту для масштаба</small>
@@ -246,7 +244,7 @@
     
     <div class="modal-header">
       <div style="display:flex; align-items:center; gap:10px; flex-wrap: wrap;">
-        <h4>📷 Скан тела (MediaPipe Pose)</h4>
+        <h4>Скан тела</h4>
         <div style="display: flex; align-items: center; gap: 6px;">
           <label for="body-scan-height" style="font-size: 14px;">Рост (см):</label>
           <input type="number" id="body-scan-height" min="140" max="220" value="175" style="width: 60px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
@@ -258,14 +256,14 @@
     <div class="modal-body">
       <!-- Шаг 1: Загрузка фото человека -->
       <div id="body-scan-upload" class="step-container">
-        <div style="display: flex; flex-direction: column; gap: 12px;">
-          <div class="upload-zone" style="min-height: 120px;">
+        <div class="body-scan-upload-row">
+          <div class="upload-zone body-scan-upload-zone">
             <span style="font-size: 28px;">📷</span>
             <p><strong>Фото спереди</strong> (обязательно)</p>
             <small>Человек стоит прямо, лицом к камере</small>
             <input type="file" id="body-image-upload" accept="image/*">
           </div>
-          <div class="upload-zone" style="min-height: 100px; border-style: dashed;">
+          <div class="upload-zone body-scan-upload-zone body-scan-upload-side">
             <span style="font-size: 24px;">↔️</span>
             <p><strong>Фото сбоку</strong> (опционально)</p>
             <small>Профиль, улучшит точность обхватов</small>
@@ -286,19 +284,19 @@
           </div>
         </div>
 
-        <div class="canvas-wrapper" style="flex-direction: column; gap: 8px;">
-          <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: flex-start;">
-            <div>
-              <div style="font-size: 11px; color: #888; margin-bottom: 4px;">Спереди</div>
+        <div class="canvas-wrapper body-scan-canvas-row">
+          <div class="body-scan-preview-row">
+            <div class="body-scan-preview-box">
+              <div class="body-scan-preview-label">Спереди</div>
               <canvas id="body-scan-canvas"></canvas>
             </div>
-            <div id="body-scan-side-area" style="min-width: 120px;">
-              <div style="font-size: 11px; color: #888; margin-bottom: 4px;">Сбоку</div>
+            <div id="body-scan-side-area" class="body-scan-preview-box">
+              <div class="body-scan-preview-label">Сбоку</div>
               <div id="body-scan-side-preview" style="display: none;">
                 <canvas id="body-scan-canvas-side"></canvas>
-                <label for="body-image-side-upload-canvas" style="font-size: 11px; color: #007bff; cursor: pointer; margin-top: 4px; display: block;">↻ Заменить</label>
+                <label for="body-image-side-upload-canvas" style="font-size: 11px; color: #007bff; cursor: pointer; margin-top: 8px; display: block;">↻ Заменить</label>
               </div>
-              <label id="body-scan-side-upload" for="body-image-side-upload-canvas" class="upload-zone" style="min-height: 80px; padding: 12px; font-size: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+              <label id="body-scan-side-upload" for="body-image-side-upload-canvas" class="upload-zone body-scan-side-upload">
                 <span style="font-size: 20px;">↔️</span>
                 <p style="margin: 4px 0;">Добавить фото сбоку</p>
                 <small style="color: #888;">улучшит точность</small>
