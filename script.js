@@ -783,3 +783,458 @@ onWindowResize();
 })();
 
 
+/* --- МОДУЛЬ "СКАН ТЕЛА" (MediaPipe Pose) --- */
+(function initBodyScan() {
+    const btnOpen = document.getElementById('btn-body-scan');
+    const modal = document.getElementById('body-scan-modal');
+    const btnClose = document.getElementById('close-body-scan');
+    const fileInput = document.getElementById('body-image-upload');
+    const fileInputSide = document.getElementById('body-image-side-upload');
+    const fileInputSideCanvas = document.getElementById('body-image-side-upload-canvas');
+    const canvas = document.getElementById('body-scan-canvas');
+    const canvasSide = document.getElementById('body-scan-canvas-side');
+    const sidePreview = document.getElementById('body-scan-side-preview');
+    const sideUpload = document.getElementById('body-scan-side-upload');
+    const ctx = canvas ? canvas.getContext('2d') : null;
+    const ctxSide = canvasSide ? canvasSide.getContext('2d') : null;
+    const summaryEl = document.getElementById('body-scan-summary');
+    const btnCompute = document.getElementById('btn-body-compute');
+    const btnRescan = document.getElementById('btn-body-rescan');
+    const btnDone = document.getElementById('btn-body-scan-done');
+    const heightInput = document.getElementById('body-scan-height');
+    const paramsContainer = document.getElementById('body-scan-params');
+    const paramInputs = {
+        chest: document.getElementById('body-scan-chest'),
+        waist: document.getElementById('body-scan-waist'),
+        hips: document.getElementById('body-scan-hips'),
+        arm: document.getElementById('body-scan-arm'),
+        leg: document.getElementById('body-scan-leg')
+    };
+    const calibContainer = document.getElementById('body-scan-calib');
+    const calibWhich = document.getElementById('body-scan-calib-which');
+    const calibValue = document.getElementById('body-scan-calib-value');
+    const btnCalib = document.getElementById('btn-body-scan-calib');
+
+    if (!btnOpen || !modal || !fileInput || !canvas || !ctx) return;
+
+    let img = new Image();
+    let imgSide = new Image();
+    let poseLandmarker = null;
+    let isProcessing = false;
+    let lastLandmarks = null;
+    let lastLandmarksSide = null;
+    let lastRawValues = {};
+
+    async function ensurePoseLandmarker() {
+        if (poseLandmarker) return poseLandmarker;
+        try {
+            const { FilesetResolver, PoseLandmarker: PoseLandmarkerClass } = await import(
+                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.10/vision_bundle.mjs"
+            );
+            const vision = await FilesetResolver.forVisionTasks(
+                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.10/wasm"
+            );
+            poseLandmarker = await PoseLandmarkerClass.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task"
+                },
+                runningMode: "IMAGE",
+                numPoses: 1
+            });
+            return poseLandmarker;
+        } catch (err) {
+            console.error("MediaPipe Pose load error:", err);
+            return null;
+        }
+    }
+
+    btnOpen.onclick = () => {
+        modal.style.display = 'flex';
+        document.getElementById('body-scan-upload').style.display = 'flex';
+        document.getElementById('body-scan-canvas-step').style.display = 'none';
+        fileInput.value = "";
+        if (fileInputSide) fileInputSide.value = "";
+        if (fileInputSideCanvas) fileInputSideCanvas.value = "";
+        summaryEl.textContent = "";
+        if (btnDone) btnDone.style.display = 'none';
+        if (paramsContainer) paramsContainer.style.display = 'none';
+        if (calibContainer) calibContainer.style.display = 'none';
+        if (sidePreview) sidePreview.style.display = 'none';
+        if (sideUpload) sideUpload.style.display = 'flex';
+        if (calibValue) calibValue.value = '';
+        lastLandmarks = null;
+        lastLandmarksSide = null;
+        lastRawValues = {};
+        img.src = '';
+        imgSide.src = '';
+        if (heightInput) heightInput.value = inputs.body.height.num.value || "175";
+    };
+
+    if (heightInput) {
+        heightInput.addEventListener('input', () => {
+            if (lastLandmarks) applyBodyMeasurementsFromPose(lastLandmarks, lastLandmarksSide);
+        });
+    }
+
+    if (btnCalib) {
+        btnCalib.onclick = applyCalibration;
+    }
+    if (calibValue) {
+        calibValue.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') applyCalibration();
+        });
+    }
+
+    function applyCalibration() {
+        const key = calibWhich ? calibWhich.value : 'chest';
+        const known = calibValue && calibValue.value ? parseFloat(calibValue.value) : null;
+        if (known == null || isNaN(known) || known <= 0) return;
+        const estimated = lastRawValues[key];
+        if (estimated == null || estimated <= 0) return;
+        const factor = known / estimated;
+        const keys = ['chest', 'waist', 'hips', 'arm', 'leg'];
+        keys.forEach(k => {
+            const el = paramInputs[k];
+            const raw = lastRawValues[k];
+            if (el && raw != null && raw > 0) {
+                const val = k === key ? known : Math.round(raw * factor);
+                el.value = Math.max(0, val);
+            }
+        });
+    }
+
+    btnClose.onclick = () => { modal.style.display = 'none'; };
+    if (btnDone) btnDone.onclick = () => {
+        applyParamsToBody();
+        modal.style.display = 'none';
+    };
+
+    fileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            img.onload = () => {
+                drawBodyImage();
+            };
+            img.src = evt.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+
+    function onSidePhotoSelected(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            imgSide.onload = () => drawBodyImage();
+            imgSide.src = evt.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+    if (fileInputSide) fileInputSide.onchange = onSidePhotoSelected;
+    if (fileInputSideCanvas) fileInputSideCanvas.onchange = onSidePhotoSelected;
+
+    if (btnCompute) {
+        btnCompute.onclick = async () => {
+            if (!img.src) return;
+            drawBodyImage();
+            await runPose();
+        };
+    }
+    if (btnRescan) {
+        btnRescan.onclick = async () => {
+            if (!img.src) return;
+            drawBodyImage();
+            await runPose();
+        };
+    }
+
+    function drawBodyImage() {
+        const maxWidth = 400;
+        const ratio = img.width > 0 ? Math.min(1, maxWidth / img.width) : 1;
+        canvas.width = img.width * ratio;
+        canvas.height = img.height * ratio;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        if (imgSide && imgSide.src && imgSide.complete && imgSide.naturalWidth > 0 && canvasSide && ctxSide) {
+            const ratioSide = Math.min(1, maxWidth / imgSide.width);
+            canvasSide.width = imgSide.width * ratioSide;
+            canvasSide.height = imgSide.height * ratioSide;
+            ctxSide.clearRect(0, 0, canvasSide.width, canvasSide.height);
+            ctxSide.drawImage(imgSide, 0, 0, canvasSide.width, canvasSide.height);
+            if (sidePreview) sidePreview.style.display = 'block';
+            if (sideUpload) sideUpload.style.display = 'none';
+        } else {
+            if (sidePreview) sidePreview.style.display = 'none';
+            if (sideUpload) sideUpload.style.display = 'flex';
+        }
+        document.getElementById('body-scan-upload').style.display = 'none';
+        document.getElementById('body-scan-canvas-step').style.display = 'block';
+    }
+
+    async function runPose() {
+        if (isProcessing) return;
+        isProcessing = true;
+        if (btnDone) btnDone.style.display = 'none';
+        const instr = document.getElementById('body-scan-instruction');
+        if (instr) instr.innerText = '⏳ Вычисляем...';
+        summaryEl.textContent = "Загружаем MediaPipe…";
+        try {
+            const detector = await ensurePoseLandmarker();
+            if (!detector) {
+                if (instr) instr.innerText = '📌 Загрузите фото и нажмите кнопку';
+                summaryEl.textContent = "Не удалось загрузить MediaPipe Pose. Проверьте интернет и консоль (F12).";
+                isProcessing = false;
+                return;
+            }
+            summaryEl.textContent = "Распознаём позу спереди...";
+            const imageBitmap = await createImageBitmap(canvas);
+            const result = await Promise.resolve(detector.detect(imageBitmap));
+            imageBitmap.close();
+            const pose = result.landmarks && result.landmarks[0];
+            if (!pose || pose.length === 0) {
+                if (instr) instr.innerText = '📌 Загрузите фото и нажмите кнопку';
+                summaryEl.textContent = "Поза не найдена. Попробуйте другое фото (человек в полный рост, фронтально).";
+                isProcessing = false;
+                return;
+            }
+            lastLandmarks = pose;
+            lastLandmarksSide = null;
+            if (imgSide && imgSide.src && imgSide.complete && imgSide.naturalWidth > 0 && canvasSide && canvasSide.width > 0) {
+                summaryEl.textContent = "Распознаём позу сбоку...";
+                const imageBitmapSide = await createImageBitmap(canvasSide);
+                const resultSide = await Promise.resolve(detector.detect(imageBitmapSide));
+                imageBitmapSide.close();
+                const poseSide = resultSide.landmarks && resultSide.landmarks[0];
+                if (poseSide && poseSide.length > 0) lastLandmarksSide = poseSide;
+            }
+            if (document.getElementById('body-scan-instruction')) {
+                document.getElementById('body-scan-instruction').innerText = '✅ Параметры вычислены';
+            }
+            drawLandmarks(pose);
+            applyBodyMeasurementsFromPose(lastLandmarks, lastLandmarksSide);
+        } catch (err) {
+            console.error("Body scan error:", err);
+            if (document.getElementById('body-scan-instruction')) {
+                document.getElementById('body-scan-instruction').innerText = '📌 Загрузите фото и нажмите кнопку';
+            }
+            summaryEl.textContent = "Ошибка анализа: " + (err.message || "неизвестная ошибка");
+        } finally {
+            isProcessing = false;
+        }
+    }
+
+    function drawLandmarks(landmarks) {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.fillStyle = '#ff4444';
+        landmarks.forEach((lm) => {
+            const x = (lm.x !== undefined ? lm.x : lm[0]) * canvas.width;
+            const y = (lm.y !== undefined ? lm.y : lm[1]) * canvas.height;
+            ctx.beginPath();
+            ctx.arc(x, y, 4, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        ctx.restore();
+    }
+
+    function ellipseCircumference(a, b) {
+        if (a <= 0 || b <= 0) return 2 * Math.PI * Math.max(a, b);
+        const h = ((a - b) / (a + b)) * ((a - b) / (a + b));
+        return Math.PI * (a + b) * (1 + h / 4);
+    }
+
+    function applyBodyMeasurementsFromPose(landmarks, landmarksSide) {
+        const toPoint = (lm) => {
+            if (!lm) return null;
+            const x = lm.x !== undefined ? lm.x : (Array.isArray(lm) ? lm[0] : null);
+            const y = lm.y !== undefined ? lm.y : (Array.isArray(lm) ? lm[1] : null);
+            return (x != null && y != null) ? { x, y } : null;
+        };
+        const getPoint = (arr, i) => arr ? toPoint(arr[i]) : null;
+        const getPointFront = (i) => getPoint(landmarks, i);
+        const getPointSide = (i) => getPoint(landmarksSide, i);
+        const distPx = (a, b, cw, ch) => Math.hypot((a.x - b.x) * (cw || canvas.width), (a.y - b.y) * (ch || canvas.height));
+        const spanX = (a, b, w) => Math.abs((a.x - b.x) * (w || canvas.width));
+
+        const nose = getPointFront(0);
+        const leftAnkle = getPointFront(27);
+        const rightAnkle = getPointFront(28);
+
+        if (!nose || !leftAnkle || !rightAnkle) {
+            summaryEl.textContent = "Недостаточно точек для оценки роста.";
+            return;
+        }
+
+        const feetY = Math.max(leftAnkle.y, rightAnkle.y);
+        const heightNorm = Math.abs(feetY - nose.y);
+        const heightPx = heightNorm * canvas.height;
+
+        const realHeightCm = parseFloat(heightInput ? heightInput.value : inputs.body.height.num.value) || 175;
+        if (!realHeightCm || realHeightCm <= 0) {
+            summaryEl.textContent = "Укажите рост (см) в поле выше.";
+            return;
+        }
+
+        const pxPerCm = heightPx / realHeightCm;
+        if (pxPerCm <= 0) {
+            summaryEl.textContent = "Ошибка масштаба. Проверьте фото и рост.";
+            return;
+        }
+
+        let pxPerCmSide = pxPerCm;
+        if (landmarksSide && canvasSide && canvasSide.width > 0) {
+            const noseS = getPointSide(0);
+            const ankleS = getPointSide(27);
+            const ankleS2 = getPointSide(28);
+            if (noseS && (ankleS || ankleS2)) {
+                const feetYS = Math.max((ankleS || ankleS2).y, (ankleS2 || ankleS).y);
+                const heightPxSide = Math.abs(feetYS - noseS.y) * canvasSide.height;
+                if (heightPxSide > 0) pxPerCmSide = heightPxSide / realHeightCm;
+            }
+        }
+
+        const leftShoulder = getPointFront(11);
+        const rightShoulder = getPointFront(12);
+        const leftHip = getPointFront(23);
+        const rightHip = getPointFront(24);
+        const leftElbow = getPointFront(13);
+        const rightElbow = getPointFront(14);
+        const leftKnee = getPointFront(25);
+        const rightKnee = getPointFront(26);
+
+        const lsSide = getPointSide(11);
+        const rsSide = getPointSide(12);
+        const lhSide = getPointSide(23);
+        const rhSide = getPointSide(24);
+        const leSide = getPointSide(13);
+        const reSide = getPointSide(14);
+        const lkSide = getPointSide(25);
+        const rkSide = getPointSide(26);
+
+        const K_BODY = 1.1;
+        const useEllipse = !!(landmarksSide && canvasSide);
+        let chest = null, waist = null, hips = null, arm = null, leg = null;
+
+        if (leftShoulder && rightShoulder) {
+            const chestWidthCm = distPx(leftShoulder, rightShoulder) / pxPerCm;
+            if (useEllipse && lsSide && rsSide) {
+                const chestDepthCm = spanX(lsSide, rsSide, canvasSide.width) / pxPerCmSide;
+                chest = ellipseCircumference(chestWidthCm / 2, chestDepthCm / 2);
+            } else {
+                chest = chestWidthCm * Math.PI * K_BODY;
+            }
+        }
+
+        if (leftHip && rightHip) {
+            const hipsWidthCm = distPx(leftHip, rightHip) / pxPerCm;
+            if (useEllipse && lhSide && rhSide) {
+                const hipsDepthCm = spanX(lhSide, rhSide, canvasSide.width) / pxPerCmSide;
+                hips = ellipseCircumference(hipsWidthCm / 2, hipsDepthCm / 2);
+            } else {
+                hips = hipsWidthCm * Math.PI * K_BODY;
+            }
+        }
+
+        const waistShoulder = leftShoulder && rightShoulder ? (leftShoulder.y + rightShoulder.y) / 2 : null;
+        const waistHip = leftHip && rightHip ? (leftHip.y + rightHip.y) / 2 : null;
+        if (waistShoulder !== null && waistHip !== null && leftShoulder && rightShoulder && leftHip && rightHip) {
+            const leftWaist = (leftShoulder.x + leftHip.x) / 2;
+            const rightWaist = (rightShoulder.x + rightHip.x) / 2;
+            const waistWidthCm = Math.abs(rightWaist - leftWaist) * canvas.width / pxPerCm;
+            if (useEllipse && lsSide && rsSide && lhSide && rhSide) {
+                const lwSide = (lsSide.x + lhSide.x) / 2;
+                const rwSide = (rsSide.x + rhSide.x) / 2;
+                const waistDepthCm = Math.abs(rwSide - lwSide) * canvasSide.width / pxPerCmSide;
+                waist = ellipseCircumference(waistWidthCm / 2, waistDepthCm / 2);
+            } else {
+                waist = waistWidthCm * Math.PI * K_BODY;
+            }
+        }
+
+        if (leftShoulder && leftElbow) {
+            const upperArmPx = distPx(leftShoulder, leftElbow);
+            const armWidthCm = (upperArmPx / pxPerCm) * 0.35;
+            if (useEllipse && lsSide && leSide) {
+                const armDepthCm = spanX(lsSide, leSide, canvasSide.width) / pxPerCmSide * 0.35;
+                arm = ellipseCircumference(armWidthCm / 2, Math.max(armDepthCm / 2, armWidthCm * 0.3));
+            } else {
+                arm = armWidthCm * Math.PI;
+            }
+        } else if (rightShoulder && rightElbow) {
+            const upperArmPx = distPx(rightShoulder, rightElbow);
+            const armWidthCm = (upperArmPx / pxPerCm) * 0.35;
+            if (useEllipse && rsSide && reSide) {
+                const armDepthCm = spanX(rsSide, reSide, canvasSide.width) / pxPerCmSide * 0.35;
+                arm = ellipseCircumference(armWidthCm / 2, Math.max(armDepthCm / 2, armWidthCm * 0.3));
+            } else {
+                arm = armWidthCm * Math.PI;
+            }
+        }
+
+        if (leftHip && leftKnee) {
+            const thighPx = distPx(leftHip, leftKnee);
+            const legWidthCm = (thighPx / pxPerCm) * 0.32;
+            if (useEllipse && lhSide && lkSide) {
+                const legDepthCm = spanX(lhSide, lkSide, canvasSide.width) / pxPerCmSide * 0.32;
+                leg = ellipseCircumference(legWidthCm / 2, Math.max(legDepthCm / 2, legWidthCm * 0.3));
+            } else {
+                leg = legWidthCm * Math.PI;
+            }
+        } else if (rightHip && rightKnee) {
+            const thighPx = distPx(rightHip, rightKnee);
+            const legWidthCm = (thighPx / pxPerCm) * 0.32;
+            if (useEllipse && rhSide && rkSide) {
+                const legDepthCm = spanX(rhSide, rkSide, canvasSide.width) / pxPerCmSide * 0.32;
+                leg = ellipseCircumference(legWidthCm / 2, Math.max(legDepthCm / 2, legWidthCm * 0.3));
+            } else {
+                leg = legWidthCm * Math.PI;
+            }
+        }
+
+        lastRawValues = {};
+        if (chest != null) lastRawValues.chest = chest;
+        if (waist != null) lastRawValues.waist = waist;
+        if (hips != null) lastRawValues.hips = hips;
+        if (arm != null) lastRawValues.arm = arm;
+        if (leg != null) lastRawValues.leg = leg;
+
+        const parts = [];
+        if (paramInputs.chest) { paramInputs.chest.value = chest != null ? Math.round(chest) : ''; if (chest) parts.push('chest'); }
+        if (paramInputs.waist) { paramInputs.waist.value = waist != null ? Math.round(waist) : ''; if (waist) parts.push('waist'); }
+        if (paramInputs.hips)  { paramInputs.hips.value  = hips  != null ? Math.round(hips)  : ''; if (hips)  parts.push('hips');  }
+        if (paramInputs.arm)  { paramInputs.arm.value   = arm   != null ? Math.round(arm)   : ''; if (arm)   parts.push('arm');   }
+        if (paramInputs.leg)  { paramInputs.leg.value   = leg   != null ? Math.round(leg)   : ''; if (leg)   parts.push('leg');   }
+
+        if (paramsContainer) paramsContainer.style.display = parts.length > 0 ? 'flex' : 'none';
+        if (calibContainer) calibContainer.style.display = parts.length > 0 ? 'flex' : 'none';
+        if (calibValue) calibValue.value = '';
+        summaryEl.textContent = parts.length > 0
+            ? (useEllipse ? "Расчёт с учётом фото сбоку (эллипс). " : "") + "Проверьте и при необходимости скорректируйте значения ниже."
+            : "Не удалось надёжно оценить параметры тела.";
+        if (btnDone) btnDone.style.display = parts.length > 0 ? 'block' : 'none';
+    }
+
+    function applyParamsToBody() {
+        const h = parseFloat(heightInput ? heightInput.value : 0) || parseFloat(inputs.body.height.num.value) || 175;
+        inputs.body.height.num.value = Math.round(h);
+        inputs.body.height.range.value = Math.round(h);
+        const set = (key, el) => {
+            const v = el && el.value ? parseInt(el.value, 10) : null;
+            if (v != null && !isNaN(v) && inputs.body[key]) {
+                inputs.body[key].num.value = v;
+                inputs.body[key].range.value = v;
+            }
+        };
+        set('chest', paramInputs.chest);
+        set('waist', paramInputs.waist);
+        set('hips', paramInputs.hips);
+        set('arm', paramInputs.arm);
+        set('leg', paramInputs.leg);
+        Object.values(inputs.body).forEach(pair => {
+            if (pair && pair.num) pair.num.dispatchEvent(new Event('input'));
+        });
+    }
+})();
+
