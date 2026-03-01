@@ -349,6 +349,24 @@ window.addEventListener('resize', onWindowResize);
 // ПРИНУДИТЕЛЬНЫЙ ВЫЗОВ (чтобы убрать белые полосы при старте)
 onWindowResize();
 
+// --- ACCORDION ---
+document.querySelectorAll('.accordion-toggle').forEach(toggle => {
+    toggle.addEventListener('click', () => {
+        const section = toggle.closest('.accordion-section');
+        if (section) section.classList.toggle('expanded');
+    });
+});
+
+// --- ESCAPE ДЛЯ ЗАКРЫТИЯ МОДАЛОК ---
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const measureModal = document.getElementById('measure-modal');
+        const bodyModal = document.getElementById('body-scan-modal');
+        if (measureModal && measureModal.style.display === 'flex') measureModal.style.display = 'none';
+        if (bodyModal && bodyModal.style.display === 'flex') bodyModal.style.display = 'none';
+    }
+});
+
 
 /* --- МОДУЛЬ "УМНАЯ ЛИНЕЙКА V3" (IGNORE A4 ZONE) --- */
 (function initMeasureTool() {
@@ -973,6 +991,9 @@ onWindowResize();
         document.getElementById('body-scan-canvas-step').style.display = 'block';
     }
 
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const loadingText = document.getElementById('loading-text');
+
     async function runPose() {
         if (isProcessing) return;
         isProcessing = true;
@@ -980,12 +1001,18 @@ onWindowResize();
         const instr = document.getElementById('body-scan-instruction');
         if (instr) instr.innerText = '⏳ Вычисляем...';
         summaryEl.textContent = "Загружаем MediaPipe…";
+        if (loadingOverlay) {
+            loadingOverlay.classList.add('active');
+            if (loadingText) loadingText.textContent = 'Загружаем MediaPipe…';
+        }
         try {
             const detector = await ensurePoseLandmarker();
+            if (loadingText) loadingText.textContent = 'Распознаём позу спереди...';
             if (!detector) {
                 if (instr) instr.innerText = '📌 Загрузите фото и нажмите кнопку';
                 summaryEl.textContent = "Не удалось загрузить MediaPipe Pose. Проверьте интернет и консоль (F12).";
                 isProcessing = false;
+                if (loadingOverlay) loadingOverlay.classList.remove('active');
                 return;
             }
             summaryEl.textContent = "Распознаём позу спереди...";
@@ -997,11 +1024,13 @@ onWindowResize();
                 if (instr) instr.innerText = '📌 Загрузите фото и нажмите кнопку';
                 summaryEl.textContent = "Поза не найдена. Попробуйте другое фото (человек в полный рост, фронтально).";
                 isProcessing = false;
+                if (loadingOverlay) loadingOverlay.classList.remove('active');
                 return;
             }
             lastLandmarks = pose;
             lastLandmarksSide = null;
             if (imgSide && imgSide.src && imgSide.complete && imgSide.naturalWidth > 0 && canvasSide && canvasSide.width > 0) {
+                if (loadingText) loadingText.textContent = 'Распознаём позу сбоку...';
                 summaryEl.textContent = "Распознаём позу сбоку...";
                 const imageBitmapSide = await createImageBitmap(canvasSide);
                 const resultSide = await Promise.resolve(detector.detect(imageBitmapSide));
@@ -1022,6 +1051,7 @@ onWindowResize();
             summaryEl.textContent = "Ошибка анализа: " + (err.message || "неизвестная ошибка");
         } finally {
             isProcessing = false;
+            if (loadingOverlay) loadingOverlay.classList.remove('active');
         }
     }
 
