@@ -807,12 +807,9 @@ document.addEventListener('keydown', (e) => {
     const modal = document.getElementById('body-scan-modal');
     const btnClose = document.getElementById('close-body-scan');
     const fileInput = document.getElementById('body-image-upload');
-    const fileInputSide = document.getElementById('body-image-side-upload');
     const fileInputSideCanvas = document.getElementById('body-image-side-upload-canvas');
     const canvas = document.getElementById('body-scan-canvas');
     const canvasSide = document.getElementById('body-scan-canvas-side');
-    const sidePreview = document.getElementById('body-scan-side-preview');
-    const sideUpload = document.getElementById('body-scan-side-upload');
     const ctx = canvas ? canvas.getContext('2d') : null;
     const ctxSide = canvasSide ? canvasSide.getContext('2d') : null;
     const summaryEl = document.getElementById('body-scan-summary');
@@ -854,7 +851,7 @@ document.addEventListener('keydown', (e) => {
             );
             poseLandmarker = await PoseLandmarkerClass.createFromOptions(vision, {
                 baseOptions: {
-                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task"
+                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task"
                 },
                 runningMode: "IMAGE",
                 numPoses: 1
@@ -866,19 +863,25 @@ document.addEventListener('keydown', (e) => {
         }
     }
 
+    const frontPlaceholder = document.getElementById('body-scan-front-placeholder');
+    const frontPreview = document.getElementById('body-scan-front-preview');
+    const sidePlaceholder = document.getElementById('body-scan-side-placeholder');
+    const sidePreviewEl = document.getElementById('body-scan-side-preview');
+    const toolbar = document.getElementById('body-scan-toolbar');
+
     btnOpen.onclick = () => {
         modal.style.display = 'flex';
-        document.getElementById('body-scan-upload').style.display = 'flex';
-        document.getElementById('body-scan-canvas-step').style.display = 'none';
         fileInput.value = "";
-        if (fileInputSide) fileInputSide.value = "";
         if (fileInputSideCanvas) fileInputSideCanvas.value = "";
         summaryEl.textContent = "";
         if (btnDone) btnDone.style.display = 'none';
         if (paramsContainer) paramsContainer.style.display = 'none';
         if (calibContainer) calibContainer.style.display = 'none';
-        if (sidePreview) sidePreview.style.display = 'none';
-        if (sideUpload) sideUpload.style.display = 'flex';
+        if (frontPlaceholder) frontPlaceholder.style.display = 'flex';
+        if (frontPreview) frontPreview.style.display = 'none';
+        if (sidePlaceholder) sidePlaceholder.style.display = 'flex';
+        if (sidePreviewEl) sidePreviewEl.style.display = 'none';
+        if (toolbar) toolbar.style.display = 'none';
         if (calibValue) calibValue.value = '';
         lastLandmarks = null;
         lastLandmarksSide = null;
@@ -950,7 +953,6 @@ document.addEventListener('keydown', (e) => {
         };
         reader.readAsDataURL(file);
     }
-    if (fileInputSide) fileInputSide.onchange = onSidePhotoSelected;
     if (fileInputSideCanvas) fileInputSideCanvas.onchange = onSidePhotoSelected;
 
     if (btnCompute) {
@@ -969,36 +971,87 @@ document.addEventListener('keydown', (e) => {
     }
 
     function drawBodyImage() {
-        const maxWidth = 400;
-        const ratio = img.width > 0 ? Math.min(1, maxWidth / img.width) : 1;
-        canvas.width = img.width * ratio;
-        canvas.height = img.height * ratio;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const maxWidth = 280;
+        const hasFront = img.src && img.complete && img.naturalWidth > 0;
+
+        if (hasFront) {
+            const ratio = Math.min(1, maxWidth / img.width);
+            canvas.width = img.width * ratio;
+            canvas.height = img.height * ratio;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            if (frontPlaceholder) frontPlaceholder.style.display = 'none';
+            if (frontPreview) frontPreview.style.display = 'flex';
+            if (toolbar) toolbar.style.display = 'flex';
+        } else {
+            if (frontPlaceholder) frontPlaceholder.style.display = 'flex';
+            if (frontPreview) frontPreview.style.display = 'none';
+            if (toolbar) toolbar.style.display = 'none';
+        }
+
         if (imgSide && imgSide.src && imgSide.complete && imgSide.naturalWidth > 0 && canvasSide && ctxSide) {
             const ratioSide = Math.min(1, maxWidth / imgSide.width);
             canvasSide.width = imgSide.width * ratioSide;
             canvasSide.height = imgSide.height * ratioSide;
             ctxSide.clearRect(0, 0, canvasSide.width, canvasSide.height);
             ctxSide.drawImage(imgSide, 0, 0, canvasSide.width, canvasSide.height);
-            if (sidePreview) sidePreview.style.display = 'block';
-            if (sideUpload) sideUpload.style.display = 'none';
+            if (sidePlaceholder) sidePlaceholder.style.display = 'none';
+            if (sidePreviewEl) sidePreviewEl.style.display = 'flex';
         } else {
-            if (sidePreview) sidePreview.style.display = 'none';
-            if (sideUpload) sideUpload.style.display = 'flex';
+            if (sidePlaceholder) sidePlaceholder.style.display = 'flex';
+            if (sidePreviewEl) sidePreviewEl.style.display = 'none';
         }
-        document.getElementById('body-scan-upload').style.display = 'none';
-        document.getElementById('body-scan-canvas-step').style.display = 'block';
     }
 
     const loadingOverlay = document.getElementById('loading-overlay');
     const loadingText = document.getElementById('loading-text');
 
+    const MIN_WIDTH = 150;
+    const MIN_HEIGHT = 280;
+
+    function validatePhoto(img) {
+        if (!img || !img.naturalWidth || !img.naturalHeight) {
+            return { ok: false, error: "Изображение не загружено" };
+        }
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        if (w < MIN_WIDTH || h < MIN_HEIGHT) {
+            return { ok: false, error: `Фото слишком маленькое. Минимум ${MIN_WIDTH}×${MIN_HEIGHT} px. Сейчас: ${w}×${h}` };
+        }
+        const minDim = Math.min(w, h);
+        const maxDim = Math.max(w, h);
+        if (maxDim > minDim * 4) {
+            return { ok: false, error: "Фото слишком вытянутое. Используйте кадр с человеком в полный рост." };
+        }
+        return { ok: true };
+    }
+
+    function validateSidePhoto(img) {
+        if (!img || !img.src || !img.complete || !img.naturalWidth || !img.naturalHeight) return { ok: true };
+        return validatePhoto(img);
+    }
+
     async function runPose() {
         if (isProcessing) return;
+        const instr = document.getElementById('body-scan-instruction');
+
+        const validFront = validatePhoto(img);
+        if (!validFront.ok) {
+            if (instr) instr.innerText = '⚠️ Проверьте фото';
+            summaryEl.textContent = validFront.error;
+            return;
+        }
+        if (imgSide && imgSide.src && imgSide.complete && imgSide.naturalWidth > 0) {
+            const validSide = validateSidePhoto(imgSide);
+            if (!validSide.ok) {
+                if (instr) instr.innerText = '⚠️ Проверьте фото сбоку';
+                summaryEl.textContent = validSide.error;
+                return;
+            }
+        }
+
         isProcessing = true;
         if (btnDone) btnDone.style.display = 'none';
-        const instr = document.getElementById('body-scan-instruction');
         if (instr) instr.innerText = '⏳ Вычисляем...';
         summaryEl.textContent = "Загружаем MediaPipe…";
         if (loadingOverlay) {
@@ -1041,7 +1094,6 @@ document.addEventListener('keydown', (e) => {
             if (document.getElementById('body-scan-instruction')) {
                 document.getElementById('body-scan-instruction').innerText = '✅ Параметры вычислены';
             }
-            drawLandmarks(pose);
             applyBodyMeasurementsFromPose(lastLandmarks, lastLandmarksSide);
         } catch (err) {
             console.error("Body scan error:", err);
@@ -1053,20 +1105,6 @@ document.addEventListener('keydown', (e) => {
             isProcessing = false;
             if (loadingOverlay) loadingOverlay.classList.remove('active');
         }
-    }
-
-    function drawLandmarks(landmarks) {
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        ctx.save();
-        ctx.fillStyle = '#ff4444';
-        landmarks.forEach((lm) => {
-            const x = (lm.x !== undefined ? lm.x : lm[0]) * canvas.width;
-            const y = (lm.y !== undefined ? lm.y : lm[1]) * canvas.height;
-            ctx.beginPath();
-            ctx.arc(x, y, 4, 0, Math.PI * 2);
-            ctx.fill();
-        });
-        ctx.restore();
     }
 
     function ellipseCircumference(a, b) {
