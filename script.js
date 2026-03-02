@@ -854,7 +854,9 @@ document.addEventListener('keydown', (e) => {
                     modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task"
                 },
                 runningMode: "IMAGE",
-                numPoses: 1
+                numPoses: 1,
+                minPoseDetectionConfidence: 0.4,
+                minPosePresenceConfidence: 0.4
             });
             return poseLandmarker;
         } catch (err) {
@@ -871,6 +873,7 @@ document.addEventListener('keydown', (e) => {
 
     btnOpen.onclick = () => {
         modal.style.display = 'flex';
+        ensurePoseLandmarker(); // Предзагрузка модели в фоне
         fileInput.value = "";
         if (fileInputSideCanvas) fileInputSideCanvas.value = "";
         summaryEl.textContent = "";
@@ -889,6 +892,9 @@ document.addEventListener('keydown', (e) => {
         img.src = '';
         imgSide.src = '';
         if (heightInput) heightInput.value = inputs.body.height.num.value || "175";
+        const bodyScanGender = document.getElementById('body-scan-gender');
+        const mainGender = document.getElementById('gender-select');
+        if (bodyScanGender && mainGender) bodyScanGender.value = mainGender.value;
     };
 
     if (heightInput) {
@@ -896,6 +902,13 @@ document.addEventListener('keydown', (e) => {
             if (lastLandmarks) applyBodyMeasurementsFromPose(lastLandmarks, lastLandmarksSide);
         });
     }
+    const genderSelect = document.getElementById('gender-select');
+    const bodyScanGender = document.getElementById('body-scan-gender');
+    [genderSelect, bodyScanGender].filter(Boolean).forEach((el) => {
+        el.addEventListener('change', () => {
+            if (lastLandmarks) applyBodyMeasurementsFromPose(lastLandmarks, lastLandmarksSide);
+        });
+    });
 
     if (btnCalib) {
         btnCalib.onclick = applyCalibration;
@@ -1007,6 +1020,20 @@ document.addEventListener('keydown', (e) => {
     const loadingText = document.getElementById('loading-text');
 
     const MIN_WIDTH = 150;
+    const ANALYZE_MAX_DIM = 512; // Разрешение для MediaPipe (отдельно от превью 280px)
+
+    function createAnalyzeBitmap(imageElement) {
+        const w = imageElement.naturalWidth;
+        const h = imageElement.naturalHeight;
+        const scale = Math.min(1, ANALYZE_MAX_DIM / Math.max(w, h));
+        const analyzeW = Math.round(w * scale);
+        const analyzeH = Math.round(h * scale);
+        const off = document.createElement('canvas');
+        off.width = analyzeW;
+        off.height = analyzeH;
+        off.getContext('2d').drawImage(imageElement, 0, 0, analyzeW, analyzeH);
+        return createImageBitmap(off);
+    }
     const MIN_HEIGHT = 280;
 
     function validatePhoto(img) {
@@ -1069,7 +1096,7 @@ document.addEventListener('keydown', (e) => {
                 return;
             }
             summaryEl.textContent = "Распознаём позу спереди...";
-            const imageBitmap = await createImageBitmap(canvas);
+            const imageBitmap = await createAnalyzeBitmap(img);
             const result = await Promise.resolve(detector.detect(imageBitmap));
             imageBitmap.close();
             const pose = result.landmarks && result.landmarks[0];
@@ -1085,7 +1112,7 @@ document.addEventListener('keydown', (e) => {
             if (imgSide && imgSide.src && imgSide.complete && imgSide.naturalWidth > 0 && canvasSide && canvasSide.width > 0) {
                 if (loadingText) loadingText.textContent = 'Распознаём позу сбоку...';
                 summaryEl.textContent = "Распознаём позу сбоку...";
-                const imageBitmapSide = await createImageBitmap(canvasSide);
+                const imageBitmapSide = await createAnalyzeBitmap(imgSide);
                 const resultSide = await Promise.resolve(detector.detect(imageBitmapSide));
                 imageBitmapSide.close();
                 const poseSide = resultSide.landmarks && resultSide.landmarks[0];
@@ -1111,6 +1138,22 @@ document.addEventListener('keydown', (e) => {
         if (a <= 0 || b <= 0) return 2 * Math.PI * Math.max(a, b);
         const h = ((a - b) / (a + b)) * ((a - b) / (a + b));
         return Math.PI * (a + b) * (1 + h / 4);
+    }
+
+    /** Коэффициенты по полу (антропометрия): мужчины — более плоский торс, крупнее руки; женщины — округлее, крупнее бёдра */
+    function getGenderCoefficients() {
+        const bodyScanGender = document.getElementById('body-scan-gender');
+        const genderSelect = document.getElementById('gender-select');
+        const source = bodyScanGender || genderSelect;
+        const g = (source && source.value === 'female') ? 'female' : 'male';
+        return {
+            kBody: g === 'female' ? 1.14 : 1.08,           // торс: женщина круглее
+            armLengthToWidth: g === 'female' ? 0.32 : 0.37, // бицепс: мужчина крупнее
+            legLengthToWidth: g === 'female' ? 0.34 : 0.30, // бедро: женщина крупнее
+            chestDepthFactor: g === 'female' ? 1.06 : 1.0,  // глубина груди (эллипс)
+            waistDepthFactor: g === 'female' ? 1.04 : 1.0,
+            hipsDepthFactor: g === 'female' ? 1.05 : 1.0
+        };
     }
 
     function applyBodyMeasurementsFromPose(landmarks, landmarksSide) {
@@ -1181,27 +1224,27 @@ document.addEventListener('keydown', (e) => {
         const lkSide = getPointSide(25);
         const rkSide = getPointSide(26);
 
-        const K_BODY = 1.1;
+        const c = getGenderCoefficients();
         const useEllipse = !!(landmarksSide && canvasSide);
         let chest = null, waist = null, hips = null, arm = null, leg = null;
 
         if (leftShoulder && rightShoulder) {
             const chestWidthCm = distPx(leftShoulder, rightShoulder) / pxPerCm;
             if (useEllipse && lsSide && rsSide) {
-                const chestDepthCm = spanX(lsSide, rsSide, canvasSide.width) / pxPerCmSide;
+                const chestDepthCm = (spanX(lsSide, rsSide, canvasSide.width) / pxPerCmSide) * c.chestDepthFactor;
                 chest = ellipseCircumference(chestWidthCm / 2, chestDepthCm / 2);
             } else {
-                chest = chestWidthCm * Math.PI * K_BODY;
+                chest = chestWidthCm * Math.PI * c.kBody;
             }
         }
 
         if (leftHip && rightHip) {
             const hipsWidthCm = distPx(leftHip, rightHip) / pxPerCm;
             if (useEllipse && lhSide && rhSide) {
-                const hipsDepthCm = spanX(lhSide, rhSide, canvasSide.width) / pxPerCmSide;
+                const hipsDepthCm = (spanX(lhSide, rhSide, canvasSide.width) / pxPerCmSide) * c.hipsDepthFactor;
                 hips = ellipseCircumference(hipsWidthCm / 2, hipsDepthCm / 2);
             } else {
-                hips = hipsWidthCm * Math.PI * K_BODY;
+                hips = hipsWidthCm * Math.PI * c.kBody;
             }
         }
 
@@ -1214,27 +1257,27 @@ document.addEventListener('keydown', (e) => {
             if (useEllipse && lsSide && rsSide && lhSide && rhSide) {
                 const lwSide = (lsSide.x + lhSide.x) / 2;
                 const rwSide = (rsSide.x + rhSide.x) / 2;
-                const waistDepthCm = Math.abs(rwSide - lwSide) * canvasSide.width / pxPerCmSide;
+                const waistDepthCm = (Math.abs(rwSide - lwSide) * canvasSide.width / pxPerCmSide) * c.waistDepthFactor;
                 waist = ellipseCircumference(waistWidthCm / 2, waistDepthCm / 2);
             } else {
-                waist = waistWidthCm * Math.PI * K_BODY;
+                waist = waistWidthCm * Math.PI * c.kBody;
             }
         }
 
         if (leftShoulder && leftElbow) {
             const upperArmPx = distPx(leftShoulder, leftElbow);
-            const armWidthCm = (upperArmPx / pxPerCm) * 0.35;
+            const armWidthCm = (upperArmPx / pxPerCm) * c.armLengthToWidth;
             if (useEllipse && lsSide && leSide) {
-                const armDepthCm = spanX(lsSide, leSide, canvasSide.width) / pxPerCmSide * 0.35;
+                const armDepthCm = spanX(lsSide, leSide, canvasSide.width) / pxPerCmSide * c.armLengthToWidth;
                 arm = ellipseCircumference(armWidthCm / 2, Math.max(armDepthCm / 2, armWidthCm * 0.3));
             } else {
                 arm = armWidthCm * Math.PI;
             }
         } else if (rightShoulder && rightElbow) {
             const upperArmPx = distPx(rightShoulder, rightElbow);
-            const armWidthCm = (upperArmPx / pxPerCm) * 0.35;
+            const armWidthCm = (upperArmPx / pxPerCm) * c.armLengthToWidth;
             if (useEllipse && rsSide && reSide) {
-                const armDepthCm = spanX(rsSide, reSide, canvasSide.width) / pxPerCmSide * 0.35;
+                const armDepthCm = spanX(rsSide, reSide, canvasSide.width) / pxPerCmSide * c.armLengthToWidth;
                 arm = ellipseCircumference(armWidthCm / 2, Math.max(armDepthCm / 2, armWidthCm * 0.3));
             } else {
                 arm = armWidthCm * Math.PI;
@@ -1243,18 +1286,18 @@ document.addEventListener('keydown', (e) => {
 
         if (leftHip && leftKnee) {
             const thighPx = distPx(leftHip, leftKnee);
-            const legWidthCm = (thighPx / pxPerCm) * 0.32;
+            const legWidthCm = (thighPx / pxPerCm) * c.legLengthToWidth;
             if (useEllipse && lhSide && lkSide) {
-                const legDepthCm = spanX(lhSide, lkSide, canvasSide.width) / pxPerCmSide * 0.32;
+                const legDepthCm = spanX(lhSide, lkSide, canvasSide.width) / pxPerCmSide * c.legLengthToWidth;
                 leg = ellipseCircumference(legWidthCm / 2, Math.max(legDepthCm / 2, legWidthCm * 0.3));
             } else {
                 leg = legWidthCm * Math.PI;
             }
         } else if (rightHip && rightKnee) {
             const thighPx = distPx(rightHip, rightKnee);
-            const legWidthCm = (thighPx / pxPerCm) * 0.32;
+            const legWidthCm = (thighPx / pxPerCm) * c.legLengthToWidth;
             if (useEllipse && rhSide && rkSide) {
-                const legDepthCm = spanX(rhSide, rkSide, canvasSide.width) / pxPerCmSide * 0.32;
+                const legDepthCm = spanX(rhSide, rkSide, canvasSide.width) / pxPerCmSide * c.legLengthToWidth;
                 leg = ellipseCircumference(legWidthCm / 2, Math.max(legDepthCm / 2, legWidthCm * 0.3));
             } else {
                 leg = legWidthCm * Math.PI;
@@ -1288,6 +1331,12 @@ document.addEventListener('keydown', (e) => {
         const h = parseFloat(heightInput ? heightInput.value : 0) || parseFloat(inputs.body.height.num.value) || 175;
         inputs.body.height.num.value = Math.round(h);
         inputs.body.height.range.value = Math.round(h);
+        const bodyScanGenderEl = document.getElementById('body-scan-gender');
+        const mainGenderEl = document.getElementById('gender-select');
+        if (bodyScanGenderEl && mainGenderEl && bodyScanGenderEl.value !== mainGenderEl.value) {
+            mainGenderEl.value = bodyScanGenderEl.value;
+            if (typeof loadModel === 'function') loadModel(bodyScanGenderEl.value);
+        }
         const set = (key, el) => {
             const v = el && el.value ? parseInt(el.value, 10) : null;
             if (v != null && !isNaN(v) && inputs.body[key]) {
