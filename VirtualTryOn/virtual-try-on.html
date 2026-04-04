@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Виртуальная примерка</title>
+  <link href="./virtualTryOn.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+  <header class="vto-header">
+    <a href="../index.html" class="vto-back-link">← На главную</a>
+    <div class="vto-title">Виртуальная примерка</div>
+    <div class="vto-header-spacer"></div>
+  </header>
+
+  <main class="vto-layout">
+    <section class="vto-left">
+      <div class="vto-card">
+        <h2 class="vto-card-title">1) Загрузите своё фото</h2>
+        <p class="vto-help">
+          Подойдут портрет или полный рост. В кадре должны быть лицо и фигура целиком.
+          <br>Рекомендуемый формат: `image/jpeg` или `image/png`.
+        </p>
+
+        <div id="vto-upload-zone" class="vto-upload-zone" role="button" tabindex="0">
+          <div class="vto-upload-zone-inner">
+            <div class="vto-upload-icon">📷</div>
+            <div class="vto-upload-text">
+              Перетащите фото или нажмите, чтобы выбрать файл
+            </div>
+          </div>
+          <input id="vto-file-input" class="vto-file-input" type="file" accept="image/*" />
+        </div>
+
+        <div id="vto-status-uploading" class="vto-status" hidden>
+          Загрузка изображения...
+        </div>
+
+        <div id="vto-status-error" class="vto-status vto-status-error" hidden></div>
+      </div>
+
+      <div class="vto-card">
+        <h2 class="vto-card-title">2) Выберите одежду</h2>
+        <div class="vto-catalog-controls">
+          <label class="vto-select-label" for="vto-category-select">Категория</label>
+          <select id="vto-category-select" class="vto-select">
+            <option value="all">Все</option>
+          </select>
+        </div>
+
+        <div id="vto-catalog" class="vto-catalog-grid"></div>
+
+        <div id="vto-catalog-hint" class="vto-hint" hidden>
+          Выберите предмет, чтобы увидеть примерку.
+        </div>
+      </div>
+    </section>
+
+    <section class="vto-right">
+      <div class="vto-preview-card">
+        <h2 class="vto-card-title">3) Примерка</h2>
+        <p class="vto-help">
+          После выбора одежды нажмите кнопку ниже. Генерация выполняется на AI-сервисе и может занять до 20-40 секунд.
+        </p>
+
+        <button id="vto-generate-btn" class="vto-generate-btn" type="button" disabled>
+          Сгенерировать примерку
+        </button>
+
+        <div class="vto-canvas-wrap">
+          <canvas id="vto-canvas" class="vto-canvas"></canvas>
+          <div id="vto-preview-empty" class="vto-overlay-info">
+            Загрузите фото и выберите предмет одежды.
+          </div>
+        </div>
+
+        <div id="vto-status-rendering" class="vto-status" hidden>
+          Генерируем результат...
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="vto-footer">
+    <span>Виртуальная примерка с AI-генерацией.</span>
+  </footer>
+
+  <script type="module" src="./virtualTryOn.js"></script>
+</body>
+</html>
+

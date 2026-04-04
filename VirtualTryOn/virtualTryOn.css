@@ -1,0 +1,327 @@
+/* VirtualTryOn page styles (isolated from existing demo styles). */
+
+:root {
+  --vto-color-primary: #2563eb;
+  --vto-color-primary-hover: #1d4ed8;
+  --vto-color-surface: rgba(255, 255, 255, 0.92);
+  --vto-color-border: rgba(226, 232, 240, 1);
+  --vto-color-text: #1e293b;
+  --vto-color-text-muted: #64748b;
+  --vto-color-bg: #f8fafc;
+  --vto-radius-sm: 8px;
+  --vto-radius-md: 12px;
+  --vto-shadow: 0 12px 40px rgba(0,0,0,0.08);
+  --vto-font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--vto-font-sans);
+  color: var(--vto-color-text);
+  background: var(--vto-color-bg);
+}
+
+.vto-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--vto-color-border);
+  background: var(--vto-color-surface);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.vto-back-link {
+  text-decoration: none;
+  color: var(--vto-color-primary);
+  font-weight: 700;
+}
+
+.vto-title {
+  font-weight: 800;
+}
+
+.vto-header-spacer {
+  width: 90px;
+}
+
+.vto-layout {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 18px;
+  padding: 18px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+@media (max-width: 900px) {
+  .vto-layout {
+    grid-template-columns: 1fr;
+  }
+  .vto-header-spacer {
+    width: 10px;
+  }
+}
+
+.vto-left, .vto-right {
+  min-width: 0;
+}
+
+.vto-card, .vto-preview-card {
+  background: var(--vto-color-surface);
+  border: 1px solid var(--vto-color-border);
+  border-radius: var(--vto-radius-md);
+  padding: 16px;
+  box-shadow: var(--vto-shadow);
+}
+
+.vto-preview-card {
+  min-height: 520px;
+}
+
+.vto-card-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.vto-help {
+  margin: 0 0 14px;
+  color: var(--vto-color-text-muted);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.vto-generate-btn {
+  width: 100%;
+  border: none;
+  border-radius: var(--vto-radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  background: var(--vto-color-primary);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.vto-generate-btn:hover {
+  background: var(--vto-color-primary-hover);
+}
+
+.vto-generate-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.vto-upload-zone {
+  border: 2px dashed rgba(37, 99, 235, 0.25);
+  background: rgba(37, 99, 235, 0.04);
+  border-radius: var(--vto-radius-md);
+  padding: 18px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.vto-upload-zone:hover {
+  border-color: rgba(37, 99, 235, 0.55);
+}
+
+.vto-upload-zone--active {
+  border-color: rgba(37, 99, 235, 0.9);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.vto-upload-zone-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vto-upload-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.vto-upload-text {
+  font-weight: 700;
+}
+
+.vto-file-input {
+  display: none;
+}
+
+.vto-status {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: var(--vto-radius-sm);
+  background: rgba(37, 99, 235, 0.07);
+  color: var(--vto-color-primary);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.vto-status-error {
+  background: rgba(220, 38, 38, 0.07);
+  color: #b91c1c;
+}
+
+.vto-catalog-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.vto-select-label {
+  font-size: 13px;
+  color: var(--vto-color-text-muted);
+  font-weight: 700;
+}
+
+.vto-select {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--vto-color-border);
+  border-radius: var(--vto-radius-sm);
+  background: #fff;
+  font-weight: 700;
+  color: var(--vto-color-text);
+}
+
+.vto-catalog-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .vto-catalog-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.vto-item-card {
+  border: 1px solid var(--vto-color-border);
+  border-radius: var(--vto-radius-sm);
+  padding: 10px;
+  background: #fff;
+  cursor: pointer;
+  min-height: 86px;
+  transition: transform 0.05s, border-color 0.15s;
+}
+
+.vto-item-image-wrap {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  background: rgba(148, 163, 184, 0.15);
+  border: 1px solid rgba(226, 232, 240, 1);
+}
+
+.vto-item-image-wrap--fallback {
+  background: rgba(148, 163, 184, 0.25);
+}
+
+.vto-item-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.vto-item-card:hover {
+  border-color: rgba(37, 99, 235, 0.6);
+}
+
+.vto-item-card:active {
+  transform: scale(0.99);
+}
+
+.vto-item-card--selected {
+  border-color: rgba(37, 99, 235, 1);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.vto-item-name {
+  font-weight: 900;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.vto-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--vto-color-text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.vto-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+.vto-hint {
+  margin-top: 10px;
+  color: var(--vto-color-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.vto-canvas-wrap {
+  position: relative;
+  width: 100%;
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.05) 0%, rgba(37, 99, 235, 0.02) 100%);
+  border-radius: var(--vto-radius-md);
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, 1);
+}
+
+.vto-canvas {
+  display: block;
+  width: 100%;
+  height: 420px;
+}
+
+@media (max-width: 900px) {
+  .vto-canvas {
+    height: 360px;
+  }
+}
+
+.vto-overlay-info {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  color: rgba(30, 41, 59, 0.8);
+  font-weight: 900;
+  text-align: center;
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.vto-footer {
+  text-align: center;
+  color: var(--vto-color-text-muted);
+  padding: 20px 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
