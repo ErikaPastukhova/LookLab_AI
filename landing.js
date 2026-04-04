@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function () {
       e.preventDefault();
 
       // Скрываем поля формы и кнопку, показываем сообщение об успехе
-      form.querySelectorAll('input, textarea, button').forEach(function (el) {
+      form.querySelectorAll('.form-field, button').forEach(function (el) {
         el.style.display = 'none';
       });
       successEl.hidden = false;
