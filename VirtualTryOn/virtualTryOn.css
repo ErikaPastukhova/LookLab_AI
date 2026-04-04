@@ -1,16 +1,17 @@
 /* VirtualTryOn page styles (isolated from existing demo styles). */
 
 :root {
-  --vto-color-primary: #2563eb;
-  --vto-color-primary-hover: #1d4ed8;
-  --vto-color-surface: rgba(255, 255, 255, 0.92);
-  --vto-color-border: rgba(226, 232, 240, 1);
-  --vto-color-text: #1e293b;
-  --vto-color-text-muted: #64748b;
-  --vto-color-bg: #f8fafc;
-  --vto-radius-sm: 8px;
-  --vto-radius-md: 12px;
-  --vto-shadow: 0 12px 40px rgba(0,0,0,0.08);
+  --vto-color-primary: #c27ad2;
+  --vto-color-primary-hover: #b16ac2;
+  --vto-color-surface: rgba(255, 255, 255, 0.94);
+  --vto-color-border: #d8ddd0;
+  --vto-color-text: #171717;
+  --vto-color-text-muted: #555555;
+  --vto-color-bg: #f5f6ec;
+  --vto-radius-sm: 14px;
+  --vto-radius-md: 22px;
+  --vto-btn-radius: 999px;
+  --vto-shadow: 0 12px 34px rgba(0,0,0,0.08);
   --vto-font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
@@ -19,15 +20,18 @@ html, body {
   padding: 0;
   font-family: var(--vto-font-sans);
   color: var(--vto-color-text);
-  background: var(--vto-color-bg);
+  background:
+    radial-gradient(circle at 6% 15%, #f1ddf7 0, #f1ddf7 12%, transparent 13%),
+    radial-gradient(circle at 90% 80%, #dff4c6 0, #dff4c6 13%, transparent 14%),
+    var(--vto-color-bg);
 }
 
 .vto-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--vto-color-border);
+  padding: 16px 20px;
+  border-bottom: 1px solid #d3d8c7;
   background: var(--vto-color-surface);
   backdrop-filter: blur(10px);
   position: sticky;
@@ -38,11 +42,17 @@ html, body {
 .vto-back-link {
   text-decoration: none;
   color: var(--vto-color-primary);
-  font-weight: 700;
+  font-weight: 800;
+  background: #eef4dd;
+  border-radius: var(--vto-btn-radius);
+  padding: 8px 14px;
+  border: 1px solid #d8e2c8;
 }
 
 .vto-title {
-  font-weight: 800;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
 }
 
 .vto-header-spacer {
@@ -52,9 +62,9 @@ html, body {
 .vto-layout {
   display: grid;
   grid-template-columns: 360px 1fr;
-  gap: 18px;
-  padding: 18px;
-  max-width: 1200px;
+  gap: 20px;
+  padding: 20px;
+  max-width: 1240px;
   margin: 0 auto;
 }
 
@@ -75,17 +85,22 @@ html, body {
   background: var(--vto-color-surface);
   border: 1px solid var(--vto-color-border);
   border-radius: var(--vto-radius-md);
-  padding: 16px;
+  padding: 18px;
   box-shadow: var(--vto-shadow);
 }
 
 .vto-preview-card {
   min-height: 520px;
+  background:
+    radial-gradient(circle at 92% 12%, rgba(194, 122, 210, 0.14) 0, rgba(194, 122, 210, 0.14) 14%, transparent 15%),
+    var(--vto-color-surface);
 }
 
 .vto-card-title {
   margin: 0 0 8px;
-  font-size: 16px;
+  font-size: 22px;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
 }
 
 .vto-help {
@@ -97,19 +112,19 @@ html, body {
 
 .vto-generate-btn {
   width: 100%;
-  border: none;
-  border-radius: var(--vto-radius-sm);
+  border: 1px solid #a8e47d;
+  border-radius: var(--vto-btn-radius);
   padding: 12px 14px;
   margin-bottom: 12px;
-  background: var(--vto-color-primary);
-  color: #fff;
+  background: #9ff168;
+  color: #111;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 900;
   cursor: pointer;
 }
 
 .vto-generate-btn:hover {
-  background: var(--vto-color-primary-hover);
+  background: #8fe15a;
 }
 
 .vto-generate-btn:disabled {
@@ -118,8 +133,8 @@ html, body {
 }
 
 .vto-upload-zone {
-  border: 2px dashed rgba(37, 99, 235, 0.25);
-  background: rgba(37, 99, 235, 0.04);
+  border: 2px dashed rgba(194, 122, 210, 0.38);
+  background: rgba(194, 122, 210, 0.08);
   border-radius: var(--vto-radius-md);
   padding: 18px;
   cursor: pointer;
@@ -127,12 +142,12 @@ html, body {
 }
 
 .vto-upload-zone:hover {
-  border-color: rgba(37, 99, 235, 0.55);
+  border-color: rgba(194, 122, 210, 0.75);
 }
 
 .vto-upload-zone--active {
-  border-color: rgba(37, 99, 235, 0.9);
-  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(194, 122, 210, 0.95);
+  background: rgba(194, 122, 210, 0.15);
 }
 
 .vto-upload-zone-inner {
@@ -148,7 +163,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(37, 99, 235, 0.12);
+  background: rgba(159, 241, 104, 0.35);
 }
 
 .vto-upload-text {
@@ -163,7 +178,7 @@ html, body {
   margin-top: 10px;
   padding: 10px 12px;
   border-radius: var(--vto-radius-sm);
-  background: rgba(37, 99, 235, 0.07);
+  background: rgba(194, 122, 210, 0.12);
   color: var(--vto-color-primary);
   font-weight: 700;
   font-size: 13px;
@@ -193,7 +208,7 @@ html, body {
   padding: 10px 12px;
   border: 1px solid var(--vto-color-border);
   border-radius: var(--vto-radius-sm);
-  background: #fff;
+  background: #fffefb;
   font-weight: 700;
   color: var(--vto-color-text);
 }
@@ -242,7 +257,7 @@ html, body {
 }
 
 .vto-item-card:hover {
-  border-color: rgba(37, 99, 235, 0.6);
+  border-color: rgba(194, 122, 210, 0.66);
 }
 
 .vto-item-card:active {
@@ -250,8 +265,8 @@ html, body {
 }
 
 .vto-item-card--selected {
-  border-color: rgba(37, 99, 235, 1);
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+  border-color: rgba(194, 122, 210, 1);
+  box-shadow: 0 0 0 2px rgba(194, 122, 210, 0.2);
 }
 
 .vto-item-name {
@@ -286,7 +301,7 @@ html, body {
 .vto-canvas-wrap {
   position: relative;
   width: 100%;
-  background: linear-gradient(180deg, rgba(37, 99, 235, 0.05) 0%, rgba(37, 99, 235, 0.02) 100%);
+  background: linear-gradient(180deg, rgba(159, 241, 104, 0.14) 0%, rgba(194, 122, 210, 0.08) 100%);
   border-radius: var(--vto-radius-md);
   overflow: hidden;
   border: 1px solid rgba(226, 232, 240, 1);
@@ -314,7 +329,7 @@ html, body {
   color: rgba(30, 41, 59, 0.8);
   font-weight: 900;
   text-align: center;
-  background: rgba(248, 250, 252, 0.72);
+  background: rgba(247, 249, 239, 0.78);
 }
 
 .vto-footer {

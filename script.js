@@ -124,8 +124,19 @@ loadModel('male');
 
 
 // --- UI МЕНЕДЖЕР ---
-const genderSelect = document.getElementById('gender-select');
-if(genderSelect) genderSelect.addEventListener('change', (e) => loadModel(e.target.value));
+const mainGenderInputs = Array.from(document.querySelectorAll('input[name="gender-select"]'));
+function getMainGenderValue() {
+    const checkedInput = mainGenderInputs.find((input) => input.checked);
+    return checkedInput && checkedInput.value === 'female' ? 'female' : 'male';
+}
+function setMainGenderValue(gender) {
+    mainGenderInputs.forEach((input) => {
+        input.checked = input.value === gender;
+    });
+}
+mainGenderInputs.forEach((input) => {
+    input.addEventListener('change', () => loadModel(getMainGenderValue()));
+});
 
 const inputs = {
     body: {
@@ -150,17 +161,28 @@ function getPair(id) {
     const num = document.getElementById('num-' + id);
     if (!range || !num) return { range:{value:0}, num:{value:0} };
 
+    const updateRangeProgress = () => {
+        const min = parseFloat(range.min || 0);
+        const max = parseFloat(range.max || 100);
+        const value = parseFloat(range.value || min);
+        const percent = max > min ? ((value - min) / (max - min)) * 100 : 0;
+        range.style.setProperty('--range-progress', `${Math.max(0, Math.min(100, percent))}%`);
+    };
+
     const update = () => {
         if(range.value !== num.value) num.value = range.value;
+        updateRangeProgress();
         updateAll();
     };
     const updateNum = () => {
         if(range.value !== num.value) range.value = num.value;
+        updateRangeProgress();
         updateAll();
     };
 
     range.addEventListener('input', update);
     num.addEventListener('input', updateNum);
+    updateRangeProgress();
     
     return { range, num };
 }
@@ -817,6 +839,7 @@ document.addEventListener('keydown', (e) => {
     const btnRescan = document.getElementById('btn-body-rescan');
     const btnDone = document.getElementById('btn-body-scan-done');
     const heightInput = document.getElementById('body-scan-height');
+    const weightInput = document.getElementById('body-scan-weight');
     const paramsContainer = document.getElementById('body-scan-params');
     const paramInputs = {
         chest: document.getElementById('body-scan-chest'),
@@ -839,6 +862,7 @@ document.addEventListener('keydown', (e) => {
     let lastLandmarks = null;
     let lastLandmarksSide = null;
     let lastRawValues = {};
+    let lastHipsEstimate = null;
 
     async function ensurePoseLandmarker() {
         if (poseLandmarker) return poseLandmarker;
@@ -889,22 +913,22 @@ document.addEventListener('keydown', (e) => {
         lastLandmarks = null;
         lastLandmarksSide = null;
         lastRawValues = {};
+        lastHipsEstimate = null;
         img.src = '';
         imgSide.src = '';
         if (heightInput) heightInput.value = inputs.body.height.num.value || "175";
+        if (weightInput && !weightInput.value) weightInput.value = "70";
         const bodyScanGender = document.getElementById('body-scan-gender');
-        const mainGender = document.getElementById('gender-select');
-        if (bodyScanGender && mainGender) bodyScanGender.value = mainGender.value;
+        if (bodyScanGender && mainGenderInputs.length) bodyScanGender.value = getMainGenderValue();
     };
 
-    if (heightInput) {
-        heightInput.addEventListener('input', () => {
+    [heightInput, weightInput].filter(Boolean).forEach((el) => {
+        el.addEventListener('input', () => {
             if (lastLandmarks) applyBodyMeasurementsFromPose(lastLandmarks, lastLandmarksSide);
         });
-    }
-    const genderSelect = document.getElementById('gender-select');
+    });
     const bodyScanGender = document.getElementById('body-scan-gender');
-    [genderSelect, bodyScanGender].filter(Boolean).forEach((el) => {
+    [...mainGenderInputs, bodyScanGender].filter(Boolean).forEach((el) => {
         el.addEventListener('change', () => {
             if (lastLandmarks) applyBodyMeasurementsFromPose(lastLandmarks, lastLandmarksSide);
         });
@@ -1061,6 +1085,18 @@ document.addEventListener('keydown', (e) => {
     async function runPose() {
         if (isProcessing) return;
         const instr = document.getElementById('body-scan-instruction');
+        const realHeightCm = parseFloat(heightInput ? heightInput.value : inputs.body.height.num.value);
+        const realWeightKg = parseFloat(weightInput ? weightInput.value : '');
+        if (!realHeightCm || realHeightCm <= 0) {
+            if (instr) instr.innerText = '⚠️ Укажите рост';
+            summaryEl.textContent = "Для скана нужен рост (см).";
+            return;
+        }
+        if (!realWeightKg || realWeightKg <= 0) {
+            if (instr) instr.innerText = '⚠️ Укажите вес';
+            summaryEl.textContent = "Для скана нужен вес (кг).";
+            return;
+        }
 
         const validFront = validatePhoto(img);
         if (!validFront.ok) {
@@ -1095,11 +1131,8 @@ document.addEventListener('keydown', (e) => {
                 if (loadingOverlay) loadingOverlay.classList.remove('active');
                 return;
             }
-            summaryEl.textContent = "Распознаём позу спереди...";
-            const imageBitmap = await createAnalyzeBitmap(img);
-            const result = await Promise.resolve(detector.detect(imageBitmap));
-            imageBitmap.close();
-            const pose = result.landmarks && result.landmarks[0];
+            summaryEl.textContent = `Распознаём позу спереди (${DETECT_PASSES} прохода)...`;
+            const pose = await detectPoseMedian(detector, img, DETECT_PASSES);
             if (!pose || pose.length === 0) {
                 if (instr) instr.innerText = '📌 Загрузите фото и нажмите кнопку';
                 summaryEl.textContent = "Поза не найдена. Попробуйте другое фото (человек в полный рост, фронтально).";
@@ -1112,10 +1145,7 @@ document.addEventListener('keydown', (e) => {
             if (imgSide && imgSide.src && imgSide.complete && imgSide.naturalWidth > 0 && canvasSide && canvasSide.width > 0) {
                 if (loadingText) loadingText.textContent = 'Распознаём позу сбоку...';
                 summaryEl.textContent = "Распознаём позу сбоку...";
-                const imageBitmapSide = await createAnalyzeBitmap(imgSide);
-                const resultSide = await Promise.resolve(detector.detect(imageBitmapSide));
-                imageBitmapSide.close();
-                const poseSide = resultSide.landmarks && resultSide.landmarks[0];
+                const poseSide = await detectPoseMedian(detector, imgSide, DETECT_PASSES);
                 if (poseSide && poseSide.length > 0) lastLandmarksSide = poseSide;
             }
             if (document.getElementById('body-scan-instruction')) {
@@ -1136,16 +1166,13 @@ document.addEventListener('keydown', (e) => {
 
     function ellipseCircumference(a, b) {
         if (a <= 0 || b <= 0) return 2 * Math.PI * Math.max(a, b);
-        const h = ((a - b) / (a + b)) * ((a - b) / (a + b));
-        return Math.PI * (a + b) * (1 + h / 4);
+        return Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));
     }
 
     /** Коэффициенты по полу (антропометрия): мужчины — более плоский торс, крупнее руки; женщины — округлее, крупнее бёдра */
     function getGenderCoefficients() {
         const bodyScanGender = document.getElementById('body-scan-gender');
-        const genderSelect = document.getElementById('gender-select');
-        const source = bodyScanGender || genderSelect;
-        const g = (source && source.value === 'female') ? 'female' : 'male';
+        const g = bodyScanGender ? bodyScanGender.value : getMainGenderValue();
         return {
             kBody: g === 'female' ? 1.14 : 1.08,           // торс: женщина круглее
             armLengthToWidth: g === 'female' ? 0.32 : 0.37, // бицепс: мужчина крупнее
@@ -1154,6 +1181,644 @@ document.addEventListener('keydown', (e) => {
             waistDepthFactor: g === 'female' ? 1.04 : 1.0,
             hipsDepthFactor: g === 'female' ? 1.05 : 1.0
         };
+    }
+
+    function clampValue(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    function getScanProfile() {
+        const bodyScanGender = document.getElementById('body-scan-gender');
+        const gender = bodyScanGender ? bodyScanGender.value : getMainGenderValue();
+        const heightCm = parseFloat(heightInput ? heightInput.value : inputs.body.height.num.value) || 175;
+        const weightKg = parseFloat(weightInput ? weightInput.value : '') || 70;
+        const hM = Math.max(1.0, heightCm / 100);
+        const bmi = weightKg / (hM * hM);
+        const bmiShift = clampValue((bmi - 22) * 0.01, -0.08, 0.14);
+        const baseK = gender === 'female'
+            ? { chest: 0.8, waist: 0.7, hips: 0.9 }
+            : { chest: 0.7, waist: 0.6, hips: 0.75 };
+        const k = {
+            chest: clampValue(baseK.chest + bmiShift, 0.55, 1.05),
+            waist: clampValue(baseK.waist + bmiShift, 0.5, 1.0),
+            hips: clampValue(baseK.hips + bmiShift, 0.6, 1.1)
+        };
+        const stats = gender === 'female'
+            ? { chest: 0.56, waist: 0.44, hips: 0.58 }
+            : { chest: 0.58, waist: 0.47, hips: 0.55 };
+        return { gender, heightCm, weightKg, bmi, k, stats };
+    }
+
+    const DETECT_PASSES = 3;
+
+    function aggregateLandmarksMedian(poses) {
+        if (!poses || poses.length === 0) return null;
+        const targetLen = Math.max(...poses.map((p) => p.length || 0));
+        if (!targetLen) return null;
+        const out = [];
+        for (let i = 0; i < targetLen; i++) {
+            const xs = [];
+            const ys = [];
+            const zs = [];
+            const vis = [];
+            const prs = [];
+            poses.forEach((pose) => {
+                const pt = pose[i];
+                if (!pt) return;
+                if (isFinite(pt.x)) xs.push(pt.x);
+                if (isFinite(pt.y)) ys.push(pt.y);
+                if (isFinite(pt.z)) zs.push(pt.z);
+                if (isFinite(pt.visibility)) vis.push(pt.visibility);
+                if (isFinite(pt.presence)) prs.push(pt.presence);
+            });
+            if (!xs.length || !ys.length) {
+                out[i] = null;
+                continue;
+            }
+            out[i] = {
+                x: median(xs),
+                y: median(ys),
+                z: zs.length ? median(zs) : 0
+            };
+            if (vis.length) out[i].visibility = median(vis);
+            if (prs.length) out[i].presence = median(prs);
+        }
+        return out;
+    }
+
+    async function detectPoseMedian(detector, imageElement, passes) {
+        const imageBitmap = await createAnalyzeBitmap(imageElement);
+        try {
+            const candidates = [];
+            for (let i = 0; i < passes; i++) {
+                const result = await Promise.resolve(detector.detect(imageBitmap));
+                const pose = result.landmarks && result.landmarks[0];
+                if (pose && pose.length > 0) candidates.push(pose);
+            }
+            return aggregateLandmarksMedian(candidates);
+        } finally {
+            imageBitmap.close();
+        }
+    }
+
+    function colorDistanceSq(r1, g1, b1, r2, g2, b2) {
+        const dr = r1 - r2;
+        const dg = g1 - g2;
+        const db = b1 - b2;
+        return dr * dr + dg * dg + db * db;
+    }
+
+    function buildForegroundMask(sourceCanvas, sourceCtx, anchor) {
+        if (!sourceCanvas || !sourceCtx || sourceCanvas.width <= 0 || sourceCanvas.height <= 0) return null;
+        const w = sourceCanvas.width;
+        const h = sourceCanvas.height;
+        let imageData;
+        try {
+            imageData = sourceCtx.getImageData(0, 0, w, h);
+        } catch (e) {
+            return null;
+        }
+        const data = imageData.data;
+        const borderStep = Math.max(2, Math.floor(Math.min(w, h) / 80));
+        let sumR = 0, sumG = 0, sumB = 0, n = 0;
+
+        const sample = (x, y) => {
+            const i = (y * w + x) * 4;
+            sumR += data[i];
+            sumG += data[i + 1];
+            sumB += data[i + 2];
+            n++;
+        };
+
+        for (let x = 0; x < w; x += borderStep) {
+            sample(x, 0);
+            sample(x, h - 1);
+        }
+        for (let y = borderStep; y < h - borderStep; y += borderStep) {
+            sample(0, y);
+            sample(w - 1, y);
+        }
+        if (n === 0) return null;
+
+        const bgR = sumR / n;
+        const bgG = sumG / n;
+        const bgB = sumB / n;
+        const thresholdSq = 45 * 45;
+
+        const rawMask = new Uint8Array(w * h);
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const i = (y * w + x) * 4;
+                const isFg = colorDistanceSq(data[i], data[i + 1], data[i + 2], bgR, bgG, bgB) > thresholdSq;
+                if (isFg) rawMask[y * w + x] = 1;
+            }
+        }
+
+        // Простая морфология для подавления точечного шума/дыр в силуэте.
+        const morphPass = (src, minNeighbors) => {
+            const out = new Uint8Array(w * h);
+            for (let y = 1; y < h - 1; y++) {
+                for (let x = 1; x < w - 1; x++) {
+                    let count = 0;
+                    for (let yy = -1; yy <= 1; yy++) {
+                        for (let xx = -1; xx <= 1; xx++) {
+                            count += src[(y + yy) * w + (x + xx)];
+                        }
+                    }
+                    out[y * w + x] = count >= minNeighbors ? 1 : 0;
+                }
+            }
+            return out;
+        };
+
+        const smoothed = morphPass(morphPass(rawMask, 3), 4);
+        const visited = new Uint8Array(w * h);
+        const labels = new Int32Array(w * h);
+        const components = [];
+
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const idx = y * w + x;
+                if (smoothed[idx] !== 1 || visited[idx] === 1) continue;
+                const queue = [idx];
+                visited[idx] = 1;
+                let qPos = 0;
+                let area = 0;
+                let sumX = 0;
+                let sumY = 0;
+                while (qPos < queue.length) {
+                    const cur = queue[qPos++];
+                    const cx = cur % w;
+                    const cy = Math.floor(cur / w);
+                    labels[cur] = components.length + 1;
+                    area++;
+                    sumX += cx;
+                    sumY += cy;
+                    const neighbors = [cur - 1, cur + 1, cur - w, cur + w];
+                    for (const nb of neighbors) {
+                        if (nb < 0 || nb >= w * h) continue;
+                        const nx = nb % w;
+                        const ny = Math.floor(nb / w);
+                        if (Math.abs(nx - cx) + Math.abs(ny - cy) !== 1) continue;
+                        if (smoothed[nb] !== 1 || visited[nb] === 1) continue;
+                        visited[nb] = 1;
+                        queue.push(nb);
+                    }
+                }
+                components.push({
+                    label: components.length + 1,
+                    area,
+                    cx: sumX / Math.max(1, area),
+                    cy: sumY / Math.max(1, area)
+                });
+            }
+        }
+        if (components.length === 0) return null;
+
+        let best = null;
+        for (const comp of components) {
+            let score = comp.area;
+            if (anchor && isFinite(anchor.x) && isFinite(anchor.y)) {
+                const dx = comp.cx - anchor.x;
+                const dy = comp.cy - anchor.y;
+                const dist = Math.hypot(dx, dy);
+                score -= dist * dist * 0.015;
+            }
+            if (!best || score > best.score) best = { ...comp, score };
+        }
+
+        const mask = new Uint8Array(w * h);
+        let keptArea = 0;
+        for (let i = 0; i < labels.length; i++) {
+            if (labels[i] === best.label) {
+                mask[i] = 1;
+                keptArea++;
+            }
+        }
+        return { mask, width: w, height: h, areaRatio: keptArea / Math.max(1, w * h) };
+    }
+
+    function getSpanByCenterCrossing(maskObj, y, expectedCenterX, searchRadius = 0, allowLongestFallback = false) {
+        if (!maskObj || !maskObj.mask) return null;
+        const w = maskObj.width;
+        const h = maskObj.height;
+        const yMin = Math.max(0, Math.floor(y - searchRadius));
+        const yMax = Math.min(h - 1, Math.ceil(y + searchRadius));
+        let best = null;
+
+        for (let yy = yMin; yy <= yMax; yy++) {
+            const center = clampValue(Math.round(expectedCenterX), 0, w - 1);
+            let pivot = -1;
+            for (let dx = 0; dx <= 12; dx++) {
+                const xl = center - dx;
+                const xr = center + dx;
+                if (xl >= 0 && maskObj.mask[yy * w + xl] === 1) { pivot = xl; break; }
+                if (xr < w && maskObj.mask[yy * w + xr] === 1) { pivot = xr; break; }
+            }
+            if (pivot === -1) {
+                if (allowLongestFallback) {
+                    const longest = getLongestSpanAtY(maskObj, yy, 0);
+                    if (longest && longest.len >= 6) {
+                        const dev = Math.abs(((longest.x1 + longest.x2) / 2) - expectedCenterX);
+                        const candidate = { ...longest, y: yy, centerDeviation: dev };
+                        if (!best || candidate.len > best.len || (candidate.len === best.len && candidate.centerDeviation < best.centerDeviation)) {
+                            best = candidate;
+                        }
+                    }
+                }
+                continue;
+            }
+
+            let x1 = pivot;
+            let x2 = pivot;
+            let gap = 0;
+            for (let x = pivot - 1; x >= 0; x--) {
+                if (maskObj.mask[yy * w + x] === 1) { x1 = x; gap = 0; } else { gap++; }
+                if (gap > 2) break;
+            }
+            gap = 0;
+            for (let x = pivot + 1; x < w; x++) {
+                if (maskObj.mask[yy * w + x] === 1) { x2 = x; gap = 0; } else { gap++; }
+                if (gap > 2) break;
+            }
+            const len = x2 - x1 + 1;
+            if (len < 6) continue;
+            const centerDeviation = Math.abs(((x1 + x2) / 2) - expectedCenterX);
+            const candidate = { y: yy, x1, x2, len, centerDeviation };
+            if (!best || candidate.len > best.len || (candidate.len === best.len && candidate.centerDeviation < best.centerDeviation)) {
+                best = candidate;
+            }
+        }
+        return best;
+    }
+
+    function getLongestSpanAtY(maskObj, y, searchRadius = 0) {
+        if (!maskObj || !maskObj.mask) return null;
+        const w = maskObj.width;
+        const h = maskObj.height;
+        const yMin = Math.max(0, Math.floor(y - searchRadius));
+        const yMax = Math.min(h - 1, Math.ceil(y + searchRadius));
+        let best = null;
+
+        for (let yy = yMin; yy <= yMax; yy++) {
+            let bestStart = -1;
+            let bestEnd = -1;
+            let runStart = -1;
+            for (let x = 0; x < w; x++) {
+                const isFg = maskObj.mask[yy * w + x] === 1;
+                if (isFg) {
+                    if (runStart === -1) runStart = x;
+                } else if (runStart !== -1) {
+                    if (bestStart === -1 || (x - runStart) > (bestEnd - bestStart + 1)) {
+                        bestStart = runStart;
+                        bestEnd = x - 1;
+                    }
+                    runStart = -1;
+                }
+            }
+            if (runStart !== -1 && (bestStart === -1 || (w - runStart) > (bestEnd - bestStart + 1))) {
+                bestStart = runStart;
+                bestEnd = w - 1;
+            }
+            if (bestStart !== -1) {
+                const len = bestEnd - bestStart + 1;
+                if (!best || len > best.len) {
+                    best = { y: yy, x1: bestStart, x2: bestEnd, len };
+                }
+            }
+        }
+        return best;
+    }
+
+    function isValidDepth(widthCm, depthCm) {
+        if (!widthCm || !depthCm || widthCm <= 0 || depthCm <= 0) return false;
+        const ratio = depthCm / widthCm;
+        return ratio >= 0.45 && ratio <= 1.6;
+    }
+
+    function median(values) {
+        if (!values || values.length === 0) return null;
+        const sorted = [...values].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        if (sorted.length % 2 === 0) return (sorted[mid - 1] + sorted[mid]) / 2;
+        return sorted[mid];
+    }
+
+    function findWaistSpanByTorsoMask(frontMask, leftShoulder, rightShoulder, leftHip, rightHip, minY, maxY) {
+        if (!frontMask || !leftShoulder || !rightShoulder || !leftHip || !rightHip) return null;
+        const h = frontMask.height;
+        const w = frontMask.width;
+
+        const shoulderY = ((leftShoulder.y + rightShoulder.y) / 2) * h;
+        const hipY = ((leftHip.y + rightHip.y) / 2) * h;
+        if (!isFinite(shoulderY) || !isFinite(hipY) || hipY <= shoulderY + 10) return null;
+
+        // Талия анатомически чаще в средней/нижней части торса, а не сразу под грудью.
+        const defaultStart = shoulderY + (hipY - shoulderY) * 0.35;
+        const defaultEnd = shoulderY + (hipY - shoulderY) * 0.88;
+        const scanStart = Math.max(0, Math.floor(minY != null ? minY : defaultStart));
+        const scanEnd = Math.min(h - 1, Math.ceil(maxY != null ? maxY : defaultEnd));
+        if (scanEnd <= scanStart) return null;
+
+        const shoulderWidthPx = Math.abs((rightShoulder.x - leftShoulder.x) * w);
+        const hipsWidthPx = Math.abs((rightHip.x - leftHip.x) * w);
+        const minAllowed = Math.max(10, Math.floor(Math.min(shoulderWidthPx, hipsWidthPx) * 0.38));
+        const maxAllowed = Math.max(minAllowed + 1, Math.ceil(Math.max(shoulderWidthPx, hipsWidthPx) * 1.15));
+
+        const shoulderCenterX = ((leftShoulder.x + rightShoulder.x) / 2) * w;
+        const hipCenterX = ((leftHip.x + rightHip.x) / 2) * w;
+        const leftShoulderX = leftShoulder.x * w;
+        const rightShoulderX = rightShoulder.x * w;
+        const leftHipX = leftHip.x * w;
+        const rightHipX = rightHip.x * w;
+        const samples = [];
+        for (let y = scanStart; y <= scanEnd; y += 2) {
+            const span = getSpanByCenterCrossing(frontMask, y, shoulderCenterX + (hipCenterX - shoulderCenterX) * ((y - shoulderY) / Math.max(1, (hipY - shoulderY))), 1);
+            if (!span) continue;
+            const t = (y - shoulderY) / Math.max(1, (hipY - shoulderY));
+            const expectedCenterX = shoulderCenterX + (hipCenterX - shoulderCenterX) * t;
+            const leftTorsoX = leftShoulderX + (leftHipX - leftShoulderX) * t;
+            const rightTorsoX = rightShoulderX + (rightHipX - rightShoulderX) * t;
+            const expectedWidth = Math.abs(rightTorsoX - leftTorsoX);
+            const dynamicMinAllowed = Math.max(minAllowed, Math.floor(expectedWidth * 0.42));
+            const dynamicMaxAllowed = Math.min(maxAllowed, Math.ceil(expectedWidth * 1.10));
+
+            if (span.len < dynamicMinAllowed || span.len > dynamicMaxAllowed) continue;
+            const spanCenter = (span.x1 + span.x2) / 2;
+            const maxCenterDeviation = Math.max(8, expectedWidth * 0.22);
+            if (Math.abs(spanCenter - expectedCenterX) > maxCenterDeviation) continue;
+            // Кандидат должен лежать в "коридоре" торса, иначе это часто фон/рука.
+            if (span.x2 < leftTorsoX - 6 || span.x1 > rightTorsoX + 6) continue;
+            const centerScore = clampValue(1 - (Math.abs(spanCenter - expectedCenterX) / Math.max(1, maxCenterDeviation)), 0, 1);
+            const widthScore = clampValue(1 - (Math.abs(span.len - expectedWidth) / Math.max(1, expectedWidth * 0.7)), 0, 1);
+            span.confidence = 0.45 * centerScore + 0.55 * widthScore;
+            samples.push(span);
+        }
+        if (samples.length < 3) return null;
+
+        // 1) Медианный фильтр по 3 соседним строкам (устранение одиночных выбросов)
+        const medianSmoothed = samples.map((sample, idx) => {
+            const lengths = [samples[idx].len];
+            if (idx > 0) lengths.push(samples[idx - 1].len);
+            if (idx < samples.length - 1) lengths.push(samples[idx + 1].len);
+            return { sample, len: median(lengths) };
+        });
+
+        // 2) Скользящее среднее по 5 строкам (стабилизация минимума талии)
+        const halfWindow = 2;
+        const averaged = medianSmoothed.map((entry, idx) => {
+            let sum = 0;
+            let cnt = 0;
+            for (let j = idx - halfWindow; j <= idx + halfWindow; j++) {
+                if (j < 0 || j >= medianSmoothed.length) continue;
+                sum += medianSmoothed[j].len;
+                cnt++;
+            }
+            return { sample: entry.sample, smoothedLen: cnt > 0 ? sum / cnt : entry.len };
+        });
+
+        const localMinima = [];
+        for (let i = 1; i < averaged.length - 1; i++) {
+            if (averaged[i].smoothedLen <= averaged[i - 1].smoothedLen && averaged[i].smoothedLen <= averaged[i + 1].smoothedLen) {
+                localMinima.push({ ...averaged[i], idx: i });
+            }
+        }
+        let best = null;
+        const candidates = localMinima.length ? localMinima : averaged;
+        for (const item of candidates) {
+            const around = averaged.filter((_, i) => Math.abs(i - (item.idx != null ? item.idx : averaged.indexOf(item))) <= 2);
+            const valleyBand = around.filter(v => v.smoothedLen <= item.smoothedLen * 1.06).length;
+            const valleyScore = clampValue(valleyBand / 5, 0, 1);
+            const lowerBias = clampValue((item.sample.y - scanStart) / Math.max(1, (scanEnd - scanStart)), 0, 1);
+            const score = item.smoothedLen - valleyScore * 8 - lowerBias * 6;
+            if (!best || score < best.score) {
+                best = { ...item, score, valleyScore };
+            }
+        }
+        if (!best) return null;
+
+        const finalY = best.sample.y;
+        const neighborhood = samples.filter((s) => Math.abs(s.y - finalY) <= 2);
+        const x1 = median(neighborhood.map((s) => s.x1));
+        const x2 = median(neighborhood.map((s) => s.x2));
+        const len = Math.max(1, x2 - x1 + 1);
+
+        return {
+            y: finalY,
+            x1,
+            x2,
+            len,
+            relativeY: finalY / Math.max(1, h - 1),
+            confidence: clampValue((best.valleyScore || 0.5) * (best.sample.confidence || 0.7), 0, 1)
+        };
+    }
+
+    function getMaskVerticalBounds(maskObj) {
+        if (!maskObj || !maskObj.mask) return null;
+        const { mask, width, height } = maskObj;
+        let top = -1;
+        let bottom = -1;
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                if (mask[y * width + x] === 1) {
+                    top = y;
+                    break;
+                }
+            }
+            if (top !== -1) break;
+        }
+        for (let y = height - 1; y >= 0; y--) {
+            for (let x = 0; x < width; x++) {
+                if (mask[y * width + x] === 1) {
+                    bottom = y;
+                    break;
+                }
+            }
+            if (bottom !== -1) break;
+        }
+        if (top === -1 || bottom === -1 || bottom <= top) return null;
+        return { top, bottom, height: bottom - top + 1 };
+    }
+
+    function confidenceToColor(confidence) {
+        if (!isFinite(confidence)) return '#9e9e9e';
+        if (confidence >= 0.75) return '#2e7d32';
+        if (confidence >= 0.5) return '#f9a825';
+        return '#c62828';
+    }
+
+    function drawScanLine(context, y, x1, x2, confidence, label) {
+        if (!context || !isFinite(y)) return;
+        const hasSpan = isFinite(x1) && isFinite(x2) && x2 > x1;
+        const color = confidenceToColor(confidence);
+        context.save();
+        context.strokeStyle = color;
+        context.lineWidth = hasSpan ? 3 : 1.5;
+        context.setLineDash(hasSpan ? [] : [5, 4]);
+        context.beginPath();
+        if (hasSpan) {
+            context.moveTo(x1, y);
+            context.lineTo(x2, y);
+        } else {
+            context.moveTo(0, y);
+            context.lineTo(context.canvas.width, y);
+        }
+        context.stroke();
+        context.setLineDash([]);
+        context.fillStyle = color;
+        context.font = '12px sans-serif';
+        const pct = isFinite(confidence) ? ` ${Math.round(confidence * 100)}%` : '';
+        context.fillText(`${label}${pct}`, hasSpan ? Math.max(4, x1 + 4) : 6, Math.max(14, y - 4));
+        context.restore();
+    }
+
+    function renderMeasurementOverlay(overlay) {
+        if (!overlay || !ctx || !canvas) return;
+        drawBodyImage();
+        const conf = overlay.confidence || {};
+        drawScanLine(ctx, overlay.chestY, overlay.chestSpan ? overlay.chestSpan.x1 : null, overlay.chestSpan ? overlay.chestSpan.x2 : null, conf.chest, 'Грудь');
+        drawScanLine(ctx, overlay.waistY, overlay.waistSpan ? overlay.waistSpan.x1 : null, overlay.waistSpan ? overlay.waistSpan.x2 : null, conf.waist, 'Талия');
+        drawScanLine(ctx, overlay.hipsY, overlay.hipsSpan ? overlay.hipsSpan.x1 : null, overlay.hipsSpan ? overlay.hipsSpan.x2 : null, conf.hips, 'Бёдра');
+    }
+
+    function buildTorsoProfile(frontMask, leftShoulder, rightShoulder, leftHip, rightHip, yStart, yEnd, section = 'torso') {
+        const profile = [];
+        for (let y = Math.floor(yStart); y <= Math.ceil(yEnd); y += 2) {
+            const span = getFrontTorsoSpanAtY(frontMask, y, leftShoulder, rightShoulder, leftHip, rightHip, section);
+            if (span) profile.push({ y, span, len: span.len, confidence: span.confidence || 0.6 });
+        }
+        if (profile.length === 0) return profile;
+        for (let i = 0; i < profile.length; i++) {
+            let sum = 0;
+            let cnt = 0;
+            for (let j = i - 2; j <= i + 2; j++) {
+                if (j < 0 || j >= profile.length) continue;
+                sum += profile[j].len;
+                cnt++;
+            }
+            profile[i].smoothedLen = sum / Math.max(1, cnt);
+        }
+        return profile;
+    }
+
+    function selectSpanFromProfile(profile, minY, maxY, mode) {
+        const scoped = profile.filter((p) => p.y >= minY && p.y <= maxY);
+        if (scoped.length === 0) return null;
+        let best = scoped[0];
+        for (const item of scoped) {
+            if (mode === 'max') {
+                if (item.smoothedLen > best.smoothedLen) best = item;
+            } else if (item.smoothedLen < best.smoothedLen) {
+                best = item;
+            }
+        }
+        const around = scoped.filter((p) => Math.abs(p.y - best.y) <= 4);
+        const stableBand = around.filter((p) => p.smoothedLen >= best.smoothedLen * 0.95).length;
+        const peakStable = stableBand >= 2;
+        return {
+            ...best.span,
+            y: best.y,
+            relativeY: best.span.relativeY,
+            confidence: best.confidence,
+            peakStable
+        };
+    }
+
+    function getFrontTorsoSpanAtY(frontMask, y, leftShoulder, rightShoulder, leftHip, rightHip, section = 'torso') {
+        if (!frontMask) return null;
+        const h = frontMask.height;
+        const w = frontMask.width;
+        const shoulderY = ((leftShoulder.y + rightShoulder.y) / 2) * h;
+        const hipY = ((leftHip.y + rightHip.y) / 2) * h;
+        const t = clampValue((y - shoulderY) / Math.max(1, (hipY - shoulderY)), 0, 1);
+        const shoulderCenterX = ((leftShoulder.x + rightShoulder.x) / 2) * w;
+        const hipCenterX = ((leftHip.x + rightHip.x) / 2) * w;
+        const leftTorsoX = (leftShoulder.x * w) + ((leftHip.x - leftShoulder.x) * w * t);
+        const rightTorsoX = (rightShoulder.x * w) + ((rightHip.x - rightShoulder.x) * w * t);
+        const expectedCenterX = shoulderCenterX + (hipCenterX - shoulderCenterX) * t;
+        const expectedWidth = Math.max(8, Math.abs(rightTorsoX - leftTorsoX));
+        const isHips = section === 'hips';
+        const spanCenter = getSpanByCenterCrossing(frontMask, y, expectedCenterX, 2, isHips);
+        const spanLongest = getLongestSpanAtY(frontMask, y, 2);
+        let span = spanCenter;
+        let source = spanCenter ? 'centerCrossing' : 'none';
+        let agreementPenalty = 1.0;
+        const centerTol = isHips ? 0.2 : 0.15;
+        const lenTol = isHips ? 0.28 : 0.22;
+        if (spanCenter && spanLongest) {
+            const centerA = (spanCenter.x1 + spanCenter.x2) / 2;
+            const centerB = (spanLongest.x1 + spanLongest.x2) / 2;
+            const lenDelta = Math.abs(spanCenter.len - spanLongest.len) / Math.max(1, Math.max(spanCenter.len, spanLongest.len));
+            const centerDelta = Math.abs(centerA - centerB);
+            const agree = centerDelta <= Math.max(8, expectedWidth * centerTol) && lenDelta <= lenTol;
+            if (agree) {
+                span = {
+                    ...spanCenter,
+                    x1: Math.round((spanCenter.x1 + spanLongest.x1) / 2),
+                    x2: Math.round((spanCenter.x2 + spanLongest.x2) / 2),
+                    len: Math.round(((spanCenter.x2 + spanLongest.x2) / 2) - ((spanCenter.x1 + spanLongest.x1) / 2) + 1)
+                };
+                source = 'consensus';
+            } else {
+                // Консервативно берём более центрированный кандидат и понижаем confidence.
+                const devA = Math.abs(centerA - expectedCenterX);
+                const devB = Math.abs(centerB - expectedCenterX);
+                span = devA <= devB ? spanCenter : spanLongest;
+                source = 'disagreeFallback';
+                agreementPenalty = isHips ? 0.82 : 0.9;
+            }
+        } else if (!spanCenter && spanLongest) {
+            span = spanLongest;
+            source = 'longestFallback';
+            agreementPenalty = isHips ? 0.75 : 0.86;
+        }
+
+        if (!span) return null;
+        const spanCenterX = (span.x1 + span.x2) / 2;
+        const centerDeviation = Math.abs(spanCenterX - expectedCenterX);
+        const maxCenterDeviation = Math.max(8, expectedWidth * (isHips ? 0.30 : 0.22));
+        if (centerDeviation > maxCenterDeviation) return null;
+        const minWidthFactor = isHips ? 0.36 : 0.4;
+        const maxWidthFactor = isHips ? 1.26 : 1.12;
+        if (span.len < expectedWidth * minWidthFactor || span.len > expectedWidth * maxWidthFactor) return null;
+        const corridorPad = isHips ? 14 : 6;
+        if (span.x2 < leftTorsoX - corridorPad || span.x1 > rightTorsoX + corridorPad) return null;
+        const centerScore = clampValue(1 - (centerDeviation / Math.max(1, maxCenterDeviation)), 0, 1);
+        const widthScore = clampValue(1 - (Math.abs(span.len - expectedWidth) / Math.max(1, expectedWidth * (isHips ? 0.9 : 0.7))), 0, 1);
+        return {
+            ...span,
+            relativeY: y / Math.max(1, h - 1),
+            confidence: (0.45 * centerScore + 0.55 * widthScore) * agreementPenalty,
+            source
+        };
+    }
+
+    function estimateSideDepthCm(sideMask, relY, scaleCmPerPx) {
+        if (!sideMask || !scaleCmPerPx) return null;
+        const h = sideMask.height;
+        const offsets = [0, -0.02, 0.02, -0.04, 0.04];
+        const candidates = [];
+        for (const off of offsets) {
+            const y = clampValue((relY + off) * h, 0, h - 1);
+            const span = getSpanByCenterCrossing(sideMask, y, sideMask.width * 0.5, 4, true);
+            if (!span || span.len < 6) continue;
+            candidates.push({
+                depthCm: span.len * scaleCmPerPx,
+                absOffset: Math.abs(off),
+                offset: off
+            });
+        }
+        if (candidates.length === 0) return null;
+        const exact = candidates.find((c) => c.absOffset === 0);
+        const medianDepth = median(candidates.map((c) => c.depthCm));
+        if (!exact) {
+            return { depthCm: medianDepth, source: 'sideNeighborMedian', consistent: false };
+        }
+        const mismatch = Math.abs(exact.depthCm - medianDepth) / Math.max(1, medianDepth);
+        if (mismatch <= 0.18) {
+            return { depthCm: exact.depthCm, source: 'sideExact', consistent: true };
+        }
+        return { depthCm: medianDepth, source: 'sideNeighborMedian', consistent: false };
     }
 
     function applyBodyMeasurementsFromPose(landmarks, landmarksSide) {
@@ -1165,45 +1830,11 @@ document.addEventListener('keydown', (e) => {
         };
         const getPoint = (arr, i) => arr ? toPoint(arr[i]) : null;
         const getPointFront = (i) => getPoint(landmarks, i);
-        const getPointSide = (i) => getPoint(landmarksSide, i);
         const distPx = (a, b, cw, ch) => Math.hypot((a.x - b.x) * (cw || canvas.width), (a.y - b.y) * (ch || canvas.height));
-        const spanX = (a, b, w) => Math.abs((a.x - b.x) * (w || canvas.width));
-
-        const nose = getPointFront(0);
-        const leftAnkle = getPointFront(27);
-        const rightAnkle = getPointFront(28);
-
-        if (!nose || !leftAnkle || !rightAnkle) {
-            summaryEl.textContent = "Недостаточно точек для оценки роста.";
+        const profile = getScanProfile();
+        if (!profile.heightCm || profile.heightCm <= 0 || !profile.weightKg || profile.weightKg <= 0) {
+            summaryEl.textContent = "Для расчёта нужны рост, вес и пол.";
             return;
-        }
-
-        const feetY = Math.max(leftAnkle.y, rightAnkle.y);
-        const heightNorm = Math.abs(feetY - nose.y);
-        const heightPx = heightNorm * canvas.height;
-
-        const realHeightCm = parseFloat(heightInput ? heightInput.value : inputs.body.height.num.value) || 175;
-        if (!realHeightCm || realHeightCm <= 0) {
-            summaryEl.textContent = "Укажите рост (см) в поле выше.";
-            return;
-        }
-
-        const pxPerCm = heightPx / realHeightCm;
-        if (pxPerCm <= 0) {
-            summaryEl.textContent = "Ошибка масштаба. Проверьте фото и рост.";
-            return;
-        }
-
-        let pxPerCmSide = pxPerCm;
-        if (landmarksSide && canvasSide && canvasSide.width > 0) {
-            const noseS = getPointSide(0);
-            const ankleS = getPointSide(27);
-            const ankleS2 = getPointSide(28);
-            if (noseS && (ankleS || ankleS2)) {
-                const feetYS = Math.max((ankleS || ankleS2).y, (ankleS2 || ankleS).y);
-                const heightPxSide = Math.abs(feetYS - noseS.y) * canvasSide.height;
-                if (heightPxSide > 0) pxPerCmSide = heightPxSide / realHeightCm;
-            }
         }
 
         const leftShoulder = getPointFront(11);
@@ -1214,94 +1845,341 @@ document.addEventListener('keydown', (e) => {
         const rightElbow = getPointFront(14);
         const leftKnee = getPointFront(25);
         const rightKnee = getPointFront(26);
+        if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) {
+            summaryEl.textContent = "Недостаточно ключевых точек торса для поиска сечений.";
+            return;
+        }
 
-        const lsSide = getPointSide(11);
-        const rsSide = getPointSide(12);
-        const lhSide = getPointSide(23);
-        const rhSide = getPointSide(24);
-        const leSide = getPointSide(13);
-        const reSide = getPointSide(14);
-        const lkSide = getPointSide(25);
-        const rkSide = getPointSide(26);
+        const torsoAnchor = {
+            x: (((leftShoulder.x + rightShoulder.x + leftHip.x + rightHip.x) / 4) * canvas.width),
+            y: (((leftShoulder.y + rightShoulder.y + leftHip.y + rightHip.y) / 4) * canvas.height)
+        };
+        const frontMask = buildForegroundMask(canvas, ctx, torsoAnchor);
+        if (!frontMask) {
+            summaryEl.textContent = "Не удалось выделить силуэт на фронтальном фото.";
+            return;
+        }
+        const frontBounds = getMaskVerticalBounds(frontMask);
+        if (!frontBounds || frontBounds.height < 40) {
+            summaryEl.textContent = "Силуэт определён ненадёжно. Проверьте фон и освещение.";
+            return;
+        }
+        const scaleCmPerPx = profile.heightCm / frontBounds.height;
+        if (!isFinite(scaleCmPerPx) || scaleCmPerPx <= 0) {
+            summaryEl.textContent = "Ошибка масштабирования по росту.";
+            return;
+        }
+
+        const sideReady = !!(landmarksSide && canvasSide && canvasSide.width > 0 && canvasSide.height > 0);
+        const sideMask = sideReady ? buildForegroundMask(canvasSide, ctxSide, { x: canvasSide.width * 0.5, y: canvasSide.height * 0.5 }) : null;
+        const sideBounds = sideMask ? getMaskVerticalBounds(sideMask) : null;
+        const scaleCmPerPxSide = sideBounds && sideBounds.height > 0 ? profile.heightCm / sideBounds.height : null;
+
+        const shoulderY = ((leftShoulder.y + rightShoulder.y) / 2) * frontMask.height;
+        const hipY = ((leftHip.y + rightHip.y) / 2) * frontMask.height;
+        const torsoDelta = Math.max(10, hipY - shoulderY);
+        const profileStartY = shoulderY + torsoDelta * 0.08;
+        const profileEndY = hipY + torsoDelta * 0.20;
+        const torsoProfile = buildTorsoProfile(frontMask, leftShoulder, rightShoulder, leftHip, rightHip, profileStartY, profileEndY, 'torso');
+        const hipsProfile = buildTorsoProfile(frontMask, leftShoulder, rightShoulder, leftHip, rightHip, hipY - torsoDelta * 0.08, hipY + torsoDelta * 0.32, 'hips');
+        const chestMinY = shoulderY + torsoDelta * 0.10;
+        const chestMaxY = shoulderY + torsoDelta * 0.24;
+        const hipsMinY = hipY - torsoDelta * 0.06;
+        const hipsMaxY = hipY + torsoDelta * 0.26;
+        const chestSpan = selectSpanFromProfile(torsoProfile, chestMinY, chestMaxY, 'max');
+        let hipSearchSource = 'none';
+        let hipSpan = selectSpanFromProfile(hipsProfile, hipsMinY, hipsMaxY, 'max');
+        if (!hipSpan) {
+            hipSearchSource = 'expandedFallback';
+            hipSpan = selectSpanFromProfile(hipsProfile, hipY - torsoDelta * 0.10, hipY + torsoDelta * 0.34, 'max');
+        } else {
+            hipSearchSource = 'narrowWindow';
+        }
+        if (hipSpan && !hipSpan.peakStable) hipSearchSource = hipSearchSource + ':unstablePeak';
+        const waistStartByChest = chestSpan ? (chestSpan.y + torsoDelta * 0.12) : (shoulderY + torsoDelta * 0.38);
+        const waistStartByAnatomy = shoulderY + torsoDelta * 0.36;
+        const waistStartY = Math.max(waistStartByChest, waistStartByAnatomy);
+        const waistEndByHip = hipSpan ? (hipSpan.y + torsoDelta * 0.04) : (hipY + torsoDelta * 0.14);
+        const waistEndY = Math.min(hipY + torsoDelta * 0.20, waistEndByHip);
+        const waistSpan = findWaistSpanByTorsoMask(frontMask, leftShoulder, rightShoulder, leftHip, rightHip, waistStartY, waistEndY);
+
+        // Если бедра найдены ненадежно, но талия надежная — оцениваем уровень бедер от талии.
+        const waistConf = waistSpan ? (waistSpan.confidence || 0) : 0;
+        const hipsConfRaw = hipSpan ? (hipSpan.confidence || 0) : 0;
+        const hipsWeak = !hipSpan || hipsConfRaw < 0.45 || (hipSpan.peakStable === false);
+        if (waistConf >= 0.72 && hipsWeak) {
+            const estHipFromWaistY = clampValue(waistSpan.y + torsoDelta * 0.23, hipY - torsoDelta * 0.05, hipY + torsoDelta * 0.34);
+            const hipFromWaistSpan =
+                selectSpanFromProfile(hipsProfile, estHipFromWaistY - torsoDelta * 0.09, estHipFromWaistY + torsoDelta * 0.09, 'max') ||
+                getFrontTorsoSpanAtY(frontMask, estHipFromWaistY, leftShoulder, rightShoulder, leftHip, rightHip, 'hips');
+            if (hipFromWaistSpan) {
+                hipSpan = {
+                    ...hipFromWaistSpan,
+                    confidence: Math.max(hipFromWaistSpan.confidence || 0.4, 0.42),
+                    source: 'fromWaistFallback'
+                };
+                hipSearchSource = 'fromWaistFallback';
+            }
+        }
+        renderMeasurementOverlay({
+            chestY: chestSpan ? chestSpan.y : chestMinY,
+            waistY: waistSpan ? waistSpan.y : ((waistStartY + waistEndY) / 2),
+            hipsY: hipSpan ? hipSpan.y : hipsMaxY,
+            chestSpan,
+            waistSpan,
+            hipsSpan: hipSpan,
+            confidence: {
+                chest: chestSpan ? chestSpan.confidence : 0,
+                waist: waistSpan ? waistSpan.confidence : 0,
+                hips: hipSpan ? hipSpan.confidence : 0
+            }
+        });
+
+        const circFromFront = (span, partKey, relY) => {
+            if (!span) return { value: null, method: null, depthSource: 'noSpan', depthConsistent: false };
+            const widthCm = span.len * scaleCmPerPx;
+            const a = widthCm / 2;
+            let b = null;
+            let depthSource = 'frontOnlyApprox';
+            let depthConsistent = false;
+            if (sideMask && scaleCmPerPxSide) {
+                const depthInfo = estimateSideDepthCm(sideMask, relY, scaleCmPerPxSide);
+                if (depthInfo && isValidDepth(widthCm, depthInfo.depthCm)) {
+                    b = depthInfo.depthCm / 2;
+                    depthSource = depthInfo.source;
+                    depthConsistent = !!depthInfo.consistent;
+                } else if (depthInfo) {
+                    depthSource = 'sideDepthInvalid';
+                }
+            }
+            if (b == null) {
+                b = profile.k[partKey] * a;
+                return { value: ellipseCircumference(a, b), method: 'approx', depthSource, depthConsistent };
+            }
+            return { value: ellipseCircumference(a, b), method: 'ellipse', depthSource, depthConsistent };
+        };
+
+        const blendWithStats = (geomValue, partKey, method) => {
+            if (geomValue == null) return null;
+            const statValue = profile.stats[partKey] * profile.heightCm;
+            const alpha = method === 'ellipse' ? 0.78 : 0.64;
+            return alpha * geomValue + (1 - alpha) * statValue;
+        };
+
+        const applySanity = (value, partKey) => {
+            if (value == null) return { value: null, lowConfidence: true };
+            const ranges = {
+                chest: [0.35 * profile.heightCm, 0.78 * profile.heightCm],
+                waist: [0.30 * profile.heightCm, 0.70 * profile.heightCm],
+                hips: [0.35 * profile.heightCm, 0.80 * profile.heightCm]
+            };
+            const [min, max] = ranges[partKey] || [0, 999];
+            const clamped = clampValue(value, min, max);
+            return { value: clamped, lowConfidence: clamped !== value };
+        };
 
         const c = getGenderCoefficients();
-        const useEllipse = !!(landmarksSide && canvasSide);
         let chest = null, waist = null, hips = null, arm = null, leg = null;
+        const methods = { chest: null, waist: null, hips: null, arm: null, leg: null };
+        const lowConfidence = { chest: false, waist: false, hips: false };
+        const sectionConfidence = { chest: 0, waist: 0, hips: 0 };
+        const qualityReasons = { chest: [], waist: [], hips: [] };
 
-        if (leftShoulder && rightShoulder) {
-            const chestWidthCm = distPx(leftShoulder, rightShoulder) / pxPerCm;
-            if (useEllipse && lsSide && rsSide) {
-                const chestDepthCm = (spanX(lsSide, rsSide, canvasSide.width) / pxPerCmSide) * c.chestDepthFactor;
-                chest = ellipseCircumference(chestWidthCm / 2, chestDepthCm / 2);
-            } else {
-                chest = chestWidthCm * Math.PI * c.kBody;
-            }
+        const chestGeom = circFromFront(chestSpan, 'chest', chestSpan ? chestSpan.relativeY : 0.3);
+        const waistGeom = circFromFront(waistSpan, 'waist', waistSpan ? waistSpan.relativeY : 0.5);
+        const hipsGeom = circFromFront(hipSpan, 'hips', hipSpan ? hipSpan.relativeY : 0.7);
+        methods.chest = chestGeom.method;
+        methods.waist = waistGeom.method;
+        methods.hips = hipsGeom.method;
+        let chestBlended = blendWithStats(chestGeom.value, 'chest', methods.chest);
+        let waistBlended = blendWithStats(waistGeom.value, 'waist', methods.waist);
+        let hipsBlended = blendWithStats(hipsGeom.value, 'hips', methods.hips);
+        let chestFallbackUsed = false;
+        let waistFallbackUsed = false;
+        let hipsFallbackUsed = false;
+
+        // Fallback: если бедра не определились, но грудь и талия надежные — оцениваем hips от waist+chest.
+        const chestBaseConf = chestSpan ? (chestSpan.confidence || 0) : 0;
+        const waistBaseConf = waistSpan ? (waistSpan.confidence || 0) : 0;
+        if ((hipsBlended == null || !isFinite(hipsBlended)) &&
+            chestBlended != null &&
+            waistBlended != null &&
+            chestBaseConf >= 0.72 &&
+            waistBaseConf >= 0.72) {
+            const bmiAdj = clampValue((profile.bmi - 22) * 0.004, -0.03, 0.06);
+            const waistRatioBase = profile.gender === 'female' ? 1.10 : 1.04;
+            const chestRatioBase = profile.gender === 'female' ? 1.00 : 0.95;
+            const hipsFromWaist = waistBlended * (waistRatioBase + bmiAdj);
+            const hipsFromChest = chestBlended * (chestRatioBase + bmiAdj * 0.5);
+            hipsBlended = 0.72 * hipsFromWaist + 0.28 * hipsFromChest;
+            hipsFallbackUsed = true;
+            methods.hips = 'statFallback';
+            hipSearchSource = hipSearchSource === 'none'
+                ? 'waistChestStatFallback'
+                : `${hipSearchSource}+waistChestStatFallback`;
         }
 
-        if (leftHip && rightHip) {
-            const hipsWidthCm = distPx(leftHip, rightHip) / pxPerCm;
-            if (useEllipse && lhSide && rhSide) {
-                const hipsDepthCm = (spanX(lhSide, rhSide, canvasSide.width) / pxPerCmSide) * c.hipsDepthFactor;
-                hips = ellipseCircumference(hipsWidthCm / 2, hipsDepthCm / 2);
-            } else {
-                hips = hipsWidthCm * Math.PI * c.kBody;
-            }
+        // Аналогичный fallback для груди: если грудь не определилась, оцениваем из талии и бедер.
+        if ((chestBlended == null || !isFinite(chestBlended)) &&
+            waistBlended != null &&
+            hipsBlended != null &&
+            waistBaseConf >= 0.68) {
+            const bmiAdj = clampValue((profile.bmi - 22) * 0.0035, -0.02, 0.05);
+            const chestFromWaist = waistBlended * (profile.gender === 'female' ? 1.12 : 1.16) + bmiAdj * 40;
+            const chestFromHips = hipsBlended * (profile.gender === 'female' ? 0.96 : 1.00);
+            chestBlended = 0.62 * chestFromWaist + 0.38 * chestFromHips;
+            chestFallbackUsed = true;
+            methods.chest = 'statFallback';
         }
 
-        const waistShoulder = leftShoulder && rightShoulder ? (leftShoulder.y + rightShoulder.y) / 2 : null;
-        const waistHip = leftHip && rightHip ? (leftHip.y + rightHip.y) / 2 : null;
-        if (waistShoulder !== null && waistHip !== null && leftShoulder && rightShoulder && leftHip && rightHip) {
-            const leftWaist = (leftShoulder.x + leftHip.x) / 2;
-            const rightWaist = (rightShoulder.x + rightHip.x) / 2;
-            const waistWidthCm = Math.abs(rightWaist - leftWaist) * canvas.width / pxPerCm;
-            if (useEllipse && lsSide && rsSide && lhSide && rhSide) {
-                const lwSide = (lsSide.x + lhSide.x) / 2;
-                const rwSide = (rsSide.x + rhSide.x) / 2;
-                const waistDepthCm = (Math.abs(rwSide - lwSide) * canvasSide.width / pxPerCmSide) * c.waistDepthFactor;
-                waist = ellipseCircumference(waistWidthCm / 2, waistDepthCm / 2);
-            } else {
-                waist = waistWidthCm * Math.PI * c.kBody;
+        // Аналогичный fallback для талии: если талия не определилась, оцениваем из груди и бедер.
+        if ((waistBlended == null || !isFinite(waistBlended)) &&
+            chestBlended != null &&
+            hipsBlended != null &&
+            chestBaseConf >= 0.68) {
+            const bmiAdj = clampValue((profile.bmi - 22) * 0.003, -0.02, 0.05);
+            const waistFromChest = chestBlended * (profile.gender === 'female' ? 0.80 : 0.88);
+            const waistFromHips = hipsBlended * (profile.gender === 'female' ? 0.72 : 0.80);
+            waistBlended = 0.56 * waistFromChest + 0.44 * waistFromHips + bmiAdj * 30;
+            waistFallbackUsed = true;
+            methods.waist = 'statFallback';
+        }
+        const chestChecked = applySanity(chestBlended, 'chest');
+        const waistChecked = applySanity(waistBlended, 'waist');
+        const hipsChecked = applySanity(hipsBlended, 'hips');
+        chest = chestChecked.value;
+        waist = waistChecked.value;
+        hips = hipsChecked.value;
+        lowConfidence.chest = chestChecked.lowConfidence || !methods.chest;
+        lowConfidence.waist = waistChecked.lowConfidence || !methods.waist;
+        lowConfidence.hips = hipsChecked.lowConfidence || !methods.hips;
+        sectionConfidence.chest = clampValue((chestSpan ? chestSpan.confidence || 0.6 : 0.25) * (methods.chest === 'ellipse' ? 1 : 0.82), 0, 1);
+        sectionConfidence.waist = clampValue((waistSpan ? waistSpan.confidence || 0.55 : 0.2) * (methods.waist === 'ellipse' ? 1 : 0.8), 0, 1);
+        sectionConfidence.hips = clampValue((hipSpan ? hipSpan.confidence || 0.6 : 0.25) * (methods.hips === 'ellipse' ? 1 : 0.82), 0, 1);
+        if (chestFallbackUsed) {
+            sectionConfidence.chest = clampValue((sectionConfidence.waist * 0.55 + sectionConfidence.hips * 0.45) * 0.74, 0, 1);
+            lowConfidence.chest = true;
+        }
+        if (waistFallbackUsed) {
+            sectionConfidence.waist = clampValue((sectionConfidence.chest * 0.58 + sectionConfidence.hips * 0.42) * 0.74, 0, 1);
+            lowConfidence.waist = true;
+        }
+        if (hipsFallbackUsed) {
+            sectionConfidence.hips = clampValue((sectionConfidence.chest * 0.55 + sectionConfidence.waist * 0.45) * 0.76, 0, 1);
+            lowConfidence.hips = true;
+        }
+        if (methods.hips === 'ellipse' && !hipsGeom.depthConsistent) {
+            sectionConfidence.hips = sectionConfidence.hips * 0.86;
+        }
+
+        // Sanity-check: бедра обычно не меньше талии (с небольшим допуском) и не должны резко прыгать между пересчётами.
+        if (hips != null && waist != null && hips < (waist - 2)) {
+            hips = waist - 2;
+            lowConfidence.hips = true;
+            qualityReasons.hips.push('hips<waist, применен sanity clamp');
+        }
+        if (hips != null && lastHipsEstimate != null) {
+            const maxJump = Math.max(6, lastHipsEstimate * 0.12);
+            const delta = hips - lastHipsEstimate;
+            if (Math.abs(delta) > maxJump) {
+                hips = lastHipsEstimate + Math.sign(delta) * maxJump;
+                lowConfidence.hips = true;
+                qualityReasons.hips.push('резкий скачок, применено ограничение delta');
             }
         }
+        if (hips != null) lastHipsEstimate = hips;
+        if (!chestSpan) qualityReasons.chest.push('сечение не найдено');
+        if (!waistSpan) qualityReasons.waist.push('сечение не найдено');
+        if (!hipSpan) qualityReasons.hips.push('сечение не найдено');
+        if (methods.chest === 'approx') qualityReasons.chest.push('нет валидной глубины профиля');
+        if (methods.waist === 'approx') qualityReasons.waist.push('нет валидной глубины профиля');
+        if (methods.hips === 'approx') qualityReasons.hips.push('нет валидной глубины профиля');
+        if (methods.chest === 'statFallback') qualityReasons.chest.push('грудь оценена по waist+hips fallback');
+        if (methods.waist === 'statFallback') qualityReasons.waist.push('талия оценена по chest+hips fallback');
+        if (methods.hips === 'statFallback') qualityReasons.hips.push('hips оценены по waist+chest fallback');
+        if (hipSpan && !hipSpan.peakStable) qualityReasons.hips.push('нет стабильного пика по y');
+        if (hipSpan && hipSpan.source === 'disagreeFallback') qualityReasons.hips.push('center/longest расходятся');
+        if (hipSpan && hipSpan.source === 'fromWaistFallback') qualityReasons.hips.push('уровень бедер оценен от талии');
+        if (hipsGeom.depthSource === 'sideNeighborMedian') qualityReasons.hips.push('глубина взята по медиане соседних уровней');
+        if (hipsGeom.depthSource === 'sideDepthInvalid') qualityReasons.hips.push('профильная глубина невалидна');
+        if (chestChecked.lowConfidence) qualityReasons.chest.push('значение вне диапазона, применен clamp');
+        if (waistChecked.lowConfidence) qualityReasons.waist.push('значение вне диапазона, применен clamp');
+        if (hipsChecked.lowConfidence) qualityReasons.hips.push('значение вне диапазона, применен clamp');
+        if (sectionConfidence.chest < 0.55) qualityReasons.chest.push('нестабильная геометрия');
+        if (sectionConfidence.waist < 0.55) qualityReasons.waist.push('нестабильная геометрия');
+        if (sectionConfidence.hips < 0.55) qualityReasons.hips.push('нестабильная геометрия');
+
+        renderMeasurementOverlay({
+            chestY: chestSpan ? chestSpan.y : chestMinY,
+            waistY: waistSpan ? waistSpan.y : ((waistStartY + waistEndY) / 2),
+            hipsY: hipSpan ? hipSpan.y : hipsMaxY,
+            chestSpan,
+            waistSpan,
+            hipsSpan: hipSpan,
+            confidence: sectionConfidence
+        });
+
+        const pxPerCm = 1 / scaleCmPerPx;
+        const pxPerCmSide = scaleCmPerPxSide ? (1 / scaleCmPerPxSide) : pxPerCm;
 
         if (leftShoulder && leftElbow) {
             const upperArmPx = distPx(leftShoulder, leftElbow);
             const armWidthCm = (upperArmPx / pxPerCm) * c.armLengthToWidth;
-            if (useEllipse && lsSide && leSide) {
-                const armDepthCm = spanX(lsSide, leSide, canvasSide.width) / pxPerCmSide * c.armLengthToWidth;
+            if (sideMask && scaleCmPerPxSide) {
+                const armDepthCm = armWidthCm * 0.7;
                 arm = ellipseCircumference(armWidthCm / 2, Math.max(armDepthCm / 2, armWidthCm * 0.3));
+                methods.arm = 'ellipse';
             } else {
                 arm = armWidthCm * Math.PI;
+                methods.arm = 'approx';
             }
         } else if (rightShoulder && rightElbow) {
             const upperArmPx = distPx(rightShoulder, rightElbow);
             const armWidthCm = (upperArmPx / pxPerCm) * c.armLengthToWidth;
-            if (useEllipse && rsSide && reSide) {
-                const armDepthCm = spanX(rsSide, reSide, canvasSide.width) / pxPerCmSide * c.armLengthToWidth;
+            if (sideMask && scaleCmPerPxSide) {
+                const armDepthCm = armWidthCm * 0.7;
                 arm = ellipseCircumference(armWidthCm / 2, Math.max(armDepthCm / 2, armWidthCm * 0.3));
+                methods.arm = 'ellipse';
             } else {
                 arm = armWidthCm * Math.PI;
+                methods.arm = 'approx';
             }
+        }
+        if (arm == null || !isFinite(arm)) {
+            const armBase = (profile.gender === 'female' ? 0.16 : 0.17) * profile.heightCm;
+            const armAdj = ((chest || 92) - 92) * 0.08 + ((waist || 80) - 80) * 0.05 + (profile.bmi - 22) * 0.35;
+            arm = clampValue(armBase + armAdj, 20, 60);
+            methods.arm = 'statFallback';
         }
 
         if (leftHip && leftKnee) {
             const thighPx = distPx(leftHip, leftKnee);
             const legWidthCm = (thighPx / pxPerCm) * c.legLengthToWidth;
-            if (useEllipse && lhSide && lkSide) {
-                const legDepthCm = spanX(lhSide, lkSide, canvasSide.width) / pxPerCmSide * c.legLengthToWidth;
+            if (sideMask && scaleCmPerPxSide) {
+                const legDepthCm = legWidthCm * 0.8;
                 leg = ellipseCircumference(legWidthCm / 2, Math.max(legDepthCm / 2, legWidthCm * 0.3));
+                methods.leg = 'ellipse';
             } else {
                 leg = legWidthCm * Math.PI;
+                methods.leg = 'approx';
             }
         } else if (rightHip && rightKnee) {
             const thighPx = distPx(rightHip, rightKnee);
             const legWidthCm = (thighPx / pxPerCm) * c.legLengthToWidth;
-            if (useEllipse && rhSide && rkSide) {
-                const legDepthCm = spanX(rhSide, rkSide, canvasSide.width) / pxPerCmSide * c.legLengthToWidth;
+            if (sideMask && scaleCmPerPxSide) {
+                const legDepthCm = legWidthCm * 0.8;
                 leg = ellipseCircumference(legWidthCm / 2, Math.max(legDepthCm / 2, legWidthCm * 0.3));
+                methods.leg = 'ellipse';
             } else {
                 leg = legWidthCm * Math.PI;
+                methods.leg = 'approx';
             }
+        }
+        if (leg == null || !isFinite(leg)) {
+            const legBase = (profile.gender === 'female' ? 0.30 : 0.285) * profile.heightCm;
+            const legAdj = ((hips || 98) - 98) * 0.10 + (profile.bmi - 22) * 0.5;
+            leg = clampValue(legBase + legAdj, 40, 90);
+            methods.leg = 'statFallback';
         }
 
         lastRawValues = {};
@@ -1321,9 +2199,47 @@ document.addEventListener('keydown', (e) => {
         if (paramsContainer) paramsContainer.style.display = parts.length > 0 ? 'flex' : 'none';
         if (calibContainer) calibContainer.style.display = parts.length > 0 ? 'flex' : 'none';
         if (calibValue) calibValue.value = '';
-        summaryEl.textContent = parts.length > 0
-            ? (useEllipse ? "Расчёт с учётом фото сбоку (эллипс). " : "") + "Проверьте и при необходимости скорректируйте значения ниже."
-            : "Не удалось надёжно оценить параметры тела.";
+        if (parts.length > 0) {
+            const approximated = Object.keys(methods).filter((k) => methods[k] === 'approx');
+            const precise = Object.keys(methods).filter((k) => methods[k] === 'ellipse');
+            const labels = {
+                chest: 'грудь',
+                waist: 'талия',
+                hips: 'бедра',
+                arm: 'рука',
+                leg: 'нога'
+            };
+            const chunks = [];
+            if (precise.length) {
+                chunks.push(`Эллипс (валидная глубина): ${precise.map((k) => labels[k]).join(', ')}.`);
+            }
+            if (approximated.length) {
+                chunks.push(`Приближенно (без валидной глубины): ${approximated.map((k) => labels[k]).join(', ')}.`);
+            }
+            const statFallbackParts = Object.keys(methods).filter((k) => methods[k] === 'statFallback');
+            if (statFallbackParts.length) {
+                chunks.push(`Fallback-модель: ${statFallbackParts.map((k) => labels[k]).join(', ')}.`);
+            }
+            chunks.push(`Источник бёдер: ${hipSearchSource}, depth=${hipsGeom.depthSource}, mode=${methods.hips || 'none'}.`);
+            chunks.push(`Confidence: грудь ${Math.round(sectionConfidence.chest * 100)}%, талия ${Math.round(sectionConfidence.waist * 100)}%, бёдра ${Math.round(sectionConfidence.hips * 100)}%.`);
+            const reasonsReadable = ['chest', 'waist', 'hips']
+                .filter((k) => qualityReasons[k].length)
+                .map((k) => `${labels[k]}: ${qualityReasons[k].join(', ')}`);
+            if (reasonsReadable.length) {
+                chunks.push(`Причины низкой уверенности — ${reasonsReadable.join(' | ')}.`);
+            }
+            const low = Object.keys(lowConfidence).filter((k) => lowConfidence[k]);
+            if (low.length) {
+                chunks.push(`Низкая уверенность: ${low.map((k) => labels[k]).join(', ')}.`);
+            }
+            if (!waistSpan || !chestSpan || !hipSpan) {
+                chunks.push("Не все уровни сечений найдены по маске торса, проверьте ракурс/фон.");
+            }
+            chunks.push(`BMI: ${profile.bmi.toFixed(1)}. Проверьте и при необходимости скорректируйте значения ниже.`);
+            summaryEl.textContent = chunks.join(' ');
+        } else {
+            summaryEl.textContent = "Не удалось надёжно оценить параметры тела.";
+        }
         if (btnDone) btnDone.style.display = parts.length > 0 ? 'block' : 'none';
     }
 
@@ -1332,9 +2248,8 @@ document.addEventListener('keydown', (e) => {
         inputs.body.height.num.value = Math.round(h);
         inputs.body.height.range.value = Math.round(h);
         const bodyScanGenderEl = document.getElementById('body-scan-gender');
-        const mainGenderEl = document.getElementById('gender-select');
-        if (bodyScanGenderEl && mainGenderEl && bodyScanGenderEl.value !== mainGenderEl.value) {
-            mainGenderEl.value = bodyScanGenderEl.value;
+        if (bodyScanGenderEl && mainGenderInputs.length && bodyScanGenderEl.value !== getMainGenderValue()) {
+            setMainGenderValue(bodyScanGenderEl.value);
             if (typeof loadModel === 'function') loadModel(bodyScanGenderEl.value);
         }
         const set = (key, el) => {

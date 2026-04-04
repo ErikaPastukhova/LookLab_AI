@@ -27,17 +27,17 @@
       <article class="card">
         <div class="card-icon">📈</div>
         <h3>Больше заказов с тех же визитов</h3>
-        <p>Покупатели охотнее добавляют товары в корзину, когда видят, как они смотрятся на человеке, а не только на фото товара.</p>
+        <p>Покупатели охотнее добавляют товары в корзину, если увидят, как одежда смотрится на них самих.</p>
       </article>
       <article class="card">
         <div class="card-icon">↩️</div>
-        <h3>Меньше возвратов и разочарований</h3>
-        <p>Онлайн‑манекен помогает клиентам лучше представить посадку и внешний вид товара, что снижает количество импульсивных и ошибочных покупок.</p>
+        <h3>Меньше возвратов</h3>
+        <p>Онлайн‑манекен помогает клиентам лучше представить посадку и внешний вид товара.</p>
       </article>
       <article class="card">
         <div class="card-icon">✨</div>
-        <h3>Выделяет бренд среди конкурентов</h3>
-        <p>Ваш магазин запоминается за счёт современного интерактивного опыта, который сложно встретить у конкурентов.</p>
+        <h3>Конкурентное преимущество</h3>
+        <p>Ваш магазин запоминается за счёт удобного функционала с заботой о клиентах.</p>
       </article>
     </div>
   </section>
@@ -63,7 +63,7 @@
         <p>Онлайн‑манекен визуализирует одежду или товар на модели, помогая клиенту принять решение прямо на сайте.</p>
       </article>
     </div>
-    <a href="demo.html" class="btn btn-primary">Посмотреть демо</a>
+    <a href="demo.html" class="btn btn-primary">Попробовать онлайн-манекен</a>
   </section>
 
   <!-- 4. Скоро кейсы -->
@@ -77,10 +77,22 @@
     <h2>Хотите интегрировать онлайн‑манекен в свой магазин?</h2>
     <p class="section-subtitle">Оставьте заявку, и мы свяжемся с вами, чтобы показать, как онлайн‑манекен может работать именно с вашим ассортиментом.</p>
     <form id="request-form-el" class="request-form">
-      <input type="text" name="name" placeholder="Как к вам обращаться" required>
-      <input type="text" name="contact" placeholder="Email или телефон для связи" required>
-      <input type="text" name="store" placeholder="Название магазина или ссылка на сайт" required>
-      <textarea name="comment" placeholder="Расскажите коротко о вашем магазине или задайте вопрос (по желанию)" rows="3"></textarea>
+      <div class="form-field">
+        <label class="form-label" for="request-name">Имя</label>
+        <input id="request-name" type="text" name="name" required>
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="request-contact">Номер телефона для связи</label>
+        <input id="request-contact" type="tel" name="contact" inputmode="tel" autocomplete="tel-national" placeholder="+7 (999) 123-45-67" pattern="^\+7[\s]?\(?\d{3}\)?[\s]?\d{3}[-\s]?\d{2}[-\s]?\d{2}$" title="Введите российский номер в формате +7 (999) 123-45-67" required>
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="request-store">Название вашего интернет-магазина или ссылка на сайт</label>
+        <input id="request-store" type="text" name="store" required>
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="request-comment">Расскажите коротко о вашем магазине или задайте вопрос (по желанию)</label>
+        <textarea id="request-comment" name="comment" rows="3"></textarea>
+      </div>
       <button type="submit" class="btn btn-primary">Отправить заявку</button>
       <p id="form-success" class="form-success" hidden>Спасибо! Мы получили вашу заявку и свяжемся с вами в течение одного рабочего дня.</p>
     </form>

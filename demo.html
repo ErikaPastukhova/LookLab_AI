@@ -8,9 +8,14 @@
 <body>
   <div id="canvas-container"></div>
 
-  <!-- ЛЕВАЯ ПАНЕЛЬ: кнопка выхода, дисклеймер, одежда -->
-  <div id="left-panel">
+  <header class="demo-header">
     <a href="index.html" class="btn-exit-demo">← На главную</a>
+    <div class="demo-title">Онлайн-манекен</div>
+    <div class="demo-header-spacer"></div>
+  </header>
+
+  <!-- ЛЕВАЯ ПАНЕЛЬ: дисклеймер, одежда -->
+  <div id="left-panel">
     <div id="disclaimer-box">
       <div class="disclaimer-icon">ℹ️</div>
       <div class="disclaimer-content">
@@ -23,10 +28,10 @@
     <div class="accordion-section expanded" data-accordion="cloth">
       <div class="accordion-header">
         <div class="accordion-toggle">
-          <h3>Одежда (см)</h3>
+          <h3>Одежда</h3>
           <span class="accordion-icon">▼</span>
         </div>
-        <button id="btn-measure-tool" class="btn btn-accent" title="Сканировать одежду по фото">📷 Скан</button>
+        <button id="btn-measure-tool" class="btn btn-accent" title="Сканировать одежду по фото">Загрузить фото</button>
       </div>
       <div class="accordion-content">
         <div class="accordion-inner">
@@ -72,24 +77,29 @@
 
   <!-- ПРАВАЯ ПАНЕЛЬ: модель, тело -->
   <div id="ui-panel">
-    <div class="control-item" style="margin-bottom: 12px;">
-      <label style="margin-bottom: 6px; display:block;">Модель / Пол</label>
-      <select id="gender-select">
-        <option value="male">Мужчина</option>
-        <option value="female">Женщина</option>
-      </select>
-    </div>
     <!-- Секция ТЕЛО -->
     <div class="accordion-section expanded" data-accordion="body">
       <div class="accordion-header">
         <div class="accordion-toggle">
-          <h3>Твоё тело (см)</h3>
+          <h3>Манекен</h3>
           <span class="accordion-icon">▼</span>
         </div>
-        <button id="btn-body-scan" class="btn btn-primary" title="Сканировать параметры по фото">Скан</button>
+        <button id="btn-body-scan" class="btn btn-primary" title="Сканировать параметры по фото">Сканировать тело</button>
       </div>
       <div class="accordion-content">
         <div class="accordion-inner">
+    <div class="control-item gender-select-row">
+      <div class="gender-radio-group" role="radiogroup" aria-label="Выбор пола">
+        <label class="gender-radio-label" for="gender-male">
+          <input id="gender-male" type="radio" name="gender-select" value="male" checked>
+          <span>Мужчина</span>
+        </label>
+        <label class="gender-radio-label" for="gender-female">
+          <input id="gender-female" type="radio" name="gender-select" value="female">
+          <span>Женщина</span>
+        </label>
+      </div>
+    </div>
     <div class="control-item">
       <div class="control-header">
         <label>Рост</label>
@@ -248,6 +258,10 @@
           <div style="display: flex; align-items: center; gap: 6px;">
             <label for="body-scan-height" style="font-size: 14px;">Рост (см):</label>
             <input type="number" id="body-scan-height" min="140" max="220" value="175" style="width: 60px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label for="body-scan-weight" style="font-size: 14px;">Вес (кг):</label>
+            <input type="number" id="body-scan-weight" min="35" max="220" value="70" style="width: 60px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
             <label for="body-scan-gender" style="font-size: 14px;">Пол:</label>

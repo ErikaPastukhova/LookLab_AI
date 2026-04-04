@@ -1,22 +1,23 @@
 /* --- ДИЗАЙН-СИСТЕМА --- */
 :root {
-  --color-primary: #2563eb;
-  --color-primary-hover: #1d4ed8;
-  --color-success: #059669;
-  --color-success-hover: #047857;
-  --color-bg: #f8fafc;
+  --color-primary: #c47ad2;
+  --color-primary-hover: #b46bc2;
+  --color-success: #9ff168;
+  --color-success-hover: #8ce055;
+  --color-bg: #f5f6ec;
   --color-surface: #ffffff;
-  --color-text: #1e293b;
-  --color-text-muted: #64748b;
-  --color-border: #e2e8f0;
-  --color-tight: #dc2626;
-  --color-loose: #2563eb;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
-  --shadow-lg: 0 10px 40px rgba(0,0,0,0.12);
+  --color-text: #171717;
+  --color-text-muted: #5d5d5d;
+  --color-border: #d8ddd0;
+  --color-tight: #f28787;
+  --color-loose: #99c8ff;
+  --radius-sm: 14px;
+  --radius-md: 22px;
+  --radius-lg: 30px;
+  --shadow-sm: 0 3px 10px rgba(0,0,0,0.06);
+  --shadow-md: 0 10px 24px rgba(0,0,0,0.08);
+  --shadow-lg: 0 16px 44px rgba(0,0,0,0.1);
+  --btn-radius: 999px;
   --font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'SF Mono', 'Consolas', monospace;
 }
@@ -37,7 +38,10 @@ html, body {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
   z-index: 0;
-  background: linear-gradient(180deg, #e0e7ef 0%, #d1dae6 100%);
+  background:
+    radial-gradient(circle at 84% 18%, #f3d8f7 0, #f3d8f7 14%, transparent 15%),
+    radial-gradient(circle at 14% 78%, #ddf3c7 0, #ddf3c7 16%, transparent 17%),
+    linear-gradient(180deg, #fdfdf8 0%, #ecefdf 100%);
 }
 
 #canvas-container canvas {
@@ -48,13 +52,39 @@ html, body {
   outline: none;
 }
 
+/* --- ВЕРХНИЙ HEADER ДЕМО --- */
+.demo-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #d3d8c7;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  z-index: 120;
+}
+
+.demo-header-spacer {
+  width: 90px;
+}
+
+.demo-title {
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+
 /* --- ЛЕВАЯ ПАНЕЛЬ --- */
 #left-panel {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  width: 300px;
-  max-height: 95vh;
+  top: 74px;
+  left: 14px;
+  width: 342px;
+  max-height: calc(100vh - 88px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -65,21 +95,19 @@ html, body {
 .btn-exit-demo {
   display: inline-block;
   align-self: flex-start;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 500;
+  padding: 8px 14px;
+  font-size: 16px;
+  font-weight: 800;
   color: var(--color-primary);
   text-decoration: none;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.97);
-  transition: background 0.2s, border-color 0.2s;
-  box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(12px);
+  border: 1px solid #d8e2c8;
+  border-radius: var(--btn-radius);
+  background: #eef4dd;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
 }
 
 .btn-exit-demo:hover {
-  background: #eff6ff;
+  background: #e7efd1;
   border-color: var(--color-primary);
 }
 
@@ -90,8 +118,9 @@ html, body {
   flex-shrink: 0;
 }
 
-#left-panel .accordion-section {
-  background: rgba(255, 255, 255, 0.97);
+#left-panel .accordion-section,
+#ui-panel .accordion-section {
+  background: rgba(255, 255, 255, 0.95);
   box-shadow: var(--shadow-lg);
   backdrop-filter: blur(12px);
 }
@@ -99,16 +128,16 @@ html, body {
 /* --- ПРАВАЯ ПАНЕЛЬ (ACCORDION) --- */
 #ui-panel {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 300px;
-  max-height: 95vh;
+  top: 74px;
+  right: 14px;
+  width: 342px;
+  max-height: calc(100vh - 88px);
   overflow-y: auto;
-  background: rgba(255, 255, 255, 0.97);
-  padding: 12px 16px;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  backdrop-filter: blur(12px);
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
   z-index: 100;
 }
 
@@ -116,7 +145,12 @@ html, body {
   margin-bottom: 8px;
   border-radius: var(--radius-md);
   overflow: hidden;
-  border: 1px solid var(--color-border);
+  border: 1px solid #cfd5c4;
+  background: #ffffff;
+}
+
+#ui-panel .accordion-section[data-accordion="body"] {
+  border-top: none;
 }
 
 .accordion-header {
@@ -124,8 +158,9 @@ html, body {
   justify-content: space-between;
   align-items: center;
   padding: 12px 14px;
-  background: var(--color-surface);
+  background: linear-gradient(180deg, #fdfdf9 0%, #f4f7e8 100%);
   gap: 12px;
+  border-bottom: 1px dashed #d7dcca;
 }
 
 .accordion-toggle {
@@ -142,7 +177,7 @@ html, body {
 }
 
 .accordion-toggle:hover {
-  background: #f8fafc;
+  background: #f2f2e8;
 }
 
 .accordion-header h3 {
@@ -177,7 +212,7 @@ html, body {
 
 .accordion-inner {
   padding: 12px 14px;
-  background: #fafbfc;
+  background: #fbfcf6;
   border-top: 1px solid var(--color-border);
 }
 
@@ -224,9 +259,56 @@ input[type=range] {
   display: block;
   width: 100%;
   cursor: pointer;
-  height: 6px;
-  accent-color: var(--color-primary);
-  border-radius: 3px;
+  height: 8px;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 999px;
+  background: transparent;
+}
+
+input[type=range]::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-primary) 0%,
+    var(--color-primary) var(--range-progress, 50%),
+    #d9dfcc var(--range-progress, 50%),
+    #d9dfcc 100%
+  );
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid #ffffff;
+  background: var(--color-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+input[type=range]::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #d9dfcc;
+}
+
+input[type=range]::-moz-range-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-primary);
+}
+
+input[type=range]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid #ffffff;
+  background: var(--color-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 select {
@@ -239,17 +321,66 @@ select {
   color: var(--color-text);
 }
 
+.gender-select-row {
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: center;
+}
+
+.gender-radio-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  background: #eef2e3;
+  border: 1px solid #d6dcc7;
+  border-radius: 12px;
+  width: min(100%, 260px);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.gender-radio-label {
+  display: block;
+  cursor: pointer;
+}
+
+.gender-radio-label span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  border-radius: 8px;
+  background: transparent;
+  color: #6a7361;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+input[name="gender-select"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+input[name="gender-select"]:checked + span {
+  background: #ffffff;
+  color: #2f2b35;
+  box-shadow: 0 1px 2px rgba(48, 38, 59, 0.12);
+}
+
 /* --- КНОПКИ (КОНСИСТЕНТНЫЕ) --- */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 16px;
+  padding: 10px 18px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--btn-radius);
   cursor: pointer;
   transition: background 0.2s, transform 0.05s;
 }
@@ -262,24 +393,39 @@ select {
   background: var(--color-success);
   color: white;
   box-shadow: var(--shadow-sm);
+  border: 1px solid #84d754;
 }
 
 .btn-primary:hover {
   background: var(--color-success-hover);
 }
 
+#btn-body-scan,
+#btn-measure-tool {
+  background: #c85bb8;
+  border-color: #b44aa6;
+  color: #ffffff;
+}
+
+#btn-body-scan:hover,
+#btn-measure-tool:hover {
+  background: #b54ca6;
+  color: #ffffff;
+}
+
 .btn-secondary {
-  background: #e2e8f0;
+  background: #efd2ed;
   color: var(--color-text);
 }
 
 .btn-secondary:hover {
-  background: #cbd5e1;
+  background: #ebc8e7;
 }
 
 .btn-accent {
   background: var(--color-primary);
   color: white;
+  border: 1px solid #b46bc2;
 }
 
 .btn-accent:hover {
@@ -293,7 +439,7 @@ select {
   font-size: 18px;
   cursor: pointer;
   color: var(--color-text-muted);
-  border-radius: var(--radius-sm);
+  border-radius: var(--btn-radius);
   transition: color 0.2s, background 0.2s;
 }
 
@@ -305,7 +451,7 @@ select {
 /* --- НИЖНЯЯ ПАНЕЛЬ --- */
 #bottom-ui {
   position: absolute;
-  bottom: 24px;
+  bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -319,16 +465,16 @@ select {
   display: flex;
   align-items: center;
   gap: 16px;
-  background: rgba(255, 255, 255, 0.95);
-  padding: 10px 20px;
-  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 12px 22px;
+  border-radius: 999px;
   box-shadow: var(--shadow-md);
   backdrop-filter: blur(8px);
 }
 
 .legend-gradient {
-  width: 140px;
-  height: 10px;
+  width: 180px;
+  height: 12px;
   border-radius: 5px;
   background: linear-gradient(90deg, var(--color-tight) 0%, #fff 50%, var(--color-loose) 100%);
   border: 1px solid var(--color-border);
@@ -344,27 +490,27 @@ select {
 
 .camera-controls {
   display: flex;
-  gap: 4px;
-  background: var(--color-surface);
-  padding: 6px;
-  border-radius: var(--radius-md);
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 8px;
+  border-radius: 999px;
   box-shadow: var(--shadow-md);
 }
 
 .camera-controls button {
   padding: 8px 16px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--color-text);
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .camera-controls button:hover {
-  background: #f1f5f9;
+  background: #eef4dd;
 }
 
 /* --- ДИСКЛЕЙМЕР (fallback для старых селекторов) --- */
@@ -375,7 +521,7 @@ select {
   padding: 14px 18px;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
-  border-left: 4px solid var(--color-primary);
+  border-left: 4px solid var(--color-success);
   display: flex;
   gap: 12px;
   align-items: flex-start;
@@ -398,7 +544,7 @@ select {
 .modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(15, 23, 42, 0.7);
+  background: rgba(25, 25, 25, 0.55);
   z-index: 2000;
   display: flex;
   justify-content: center;
@@ -408,19 +554,19 @@ select {
 
 .modal-content.large-modal {
   width: 95%;
-  max-width: 720px;
+  max-width: 760px;
   max-height: 90vh;
-  background: var(--color-bg);
+  background: #f8faef;
   border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+  box-shadow: 0 30px 60px -12px rgba(0,0,0,0.3);
 }
 
 .modal-header {
   padding: 16px 20px;
-  background: var(--color-surface);
+  background: #ffffff;
   border-bottom: 1px solid var(--color-border);
   display: flex;
   justify-content: space-between;
@@ -533,7 +679,7 @@ select {
 
 .body-scan-preview-box {
   padding: 16px 20px;
-  background: #2d3748;
+  background: #30333c;
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
@@ -561,7 +707,7 @@ select {
 .body-scan-tips {
   margin-bottom: 16px;
   padding: 12px 14px;
-  background: #f8fafc;
+  background: #f3f7e8;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   font-size: 13px;
@@ -591,14 +737,14 @@ select {
 
 /* --- ЗОНЫ ЗАГРУЗКИ --- */
 .upload-zone {
-  border: 2px dashed var(--color-border);
+  border: 1px dashed #c5cfb8;
   border-radius: var(--radius-md);
   min-height: 120px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background: var(--color-surface);
+  background: #fbfcf7;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
   position: relative;
@@ -606,7 +752,7 @@ select {
 
 .upload-zone:hover {
   border-color: var(--color-primary);
-  background: #eff6ff;
+  background: #f2e9f6;
 }
 
 .upload-zone input {
@@ -620,7 +766,7 @@ select {
 /* --- КАНВАС И TOOLBAR --- */
 .canvas-wrapper {
   flex-grow: 1;
-  background: #1e293b;
+  background: linear-gradient(180deg, #2f3441 0%, #22252d 100%);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -644,20 +790,21 @@ select {
   gap: 10px;
   background: var(--color-surface);
   padding: 12px 14px;
-  border-radius: var(--radius-md);
+  border-radius: 18px;
   box-shadow: var(--shadow-sm);
+  border: 1px solid #d6dcc8;
 }
 
 .calib-block {
-  background: #f1f5f9;
+  background: #f1f6e5;
   border: 1px solid var(--color-border);
 }
 
 .instruction-badge {
-  background: #f1f5f9;
+  background: #f5f0fa;
   color: var(--color-text);
   padding: 6px 14px;
-  border-radius: 20px;
+  border-radius: 999px;
   font-weight: 600;
   font-size: 13px;
   border-left: 4px solid var(--color-primary);
@@ -667,7 +814,7 @@ select {
 .loading-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(255,255,255,0.9);
+  background: rgba(247, 249, 239, 0.94);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -709,19 +856,21 @@ select {
   color: white !important;
   padding: 10px 20px !important;
   font-weight: 600 !important;
-  border-radius: var(--radius-sm) !important;
+  border-radius: var(--btn-radius) !important;
 }
 
 .secondary-btn {
-  background: #e2e8f0 !important;
+  background: #f3d9f0 !important;
   color: var(--color-text) !important;
   font-weight: 500 !important;
+  border-radius: var(--btn-radius) !important;
 }
 
 .magic-btn {
-  background: linear-gradient(135deg, var(--color-primary), #7c3aed) !important;
+  background: linear-gradient(135deg, var(--color-primary), #8cb7ff) !important;
   color: white !important;
   font-weight: 600 !important;
+  border-radius: var(--btn-radius) !important;
 }
 
 /* --- TOAST --- */
@@ -730,7 +879,7 @@ select {
   top: 70px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--color-text);
+  background: #252525;
   color: white;
   padding: 12px 24px;
   border-radius: 24px;
@@ -768,15 +917,15 @@ select {
 /* --- МОБИЛЬНАЯ АДАПТАЦИЯ --- */
 @media (max-width: 768px) {
   #left-panel {
-    width: calc(100% - 20px);
+    width: calc(100% - 16px);
     max-width: 340px;
-    left: 10px;
+    left: 8px;
   }
 
   #ui-panel {
-    width: calc(100% - 20px);
+    width: calc(100% - 16px);
     max-width: 340px;
-    right: 10px;
+    right: 8px;
   }
 
   #disclaimer-box {
