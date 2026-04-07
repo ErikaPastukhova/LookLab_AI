@@ -8,14 +8,9 @@
 <body>
   <div id="canvas-container"></div>
 
-  <header class="demo-header">
-    <a href="index.html" class="btn-exit-demo">← На главную</a>
-    <div class="demo-title">Онлайн-манекен</div>
-    <div class="demo-header-spacer"></div>
-  </header>
-
-  <!-- ЛЕВАЯ ПАНЕЛЬ: дисклеймер, одежда -->
+  <!-- ЛЕВАЯ ПАНЕЛЬ: кнопка выхода, дисклеймер, одежда -->
   <div id="left-panel">
+    <a href="index.html" class="btn-exit-demo">← На главную</a>
     <div id="disclaimer-box">
       <div class="disclaimer-icon">ℹ️</div>
       <div class="disclaimer-content">
@@ -90,13 +85,13 @@
         <div class="accordion-inner">
     <div class="control-item gender-select-row">
       <div class="gender-radio-group" role="radiogroup" aria-label="Выбор пола">
-        <label class="gender-radio-label" for="gender-male">
-          <input id="gender-male" type="radio" name="gender-select" value="male" checked>
-          <span>Мужчина</span>
-        </label>
         <label class="gender-radio-label" for="gender-female">
-          <input id="gender-female" type="radio" name="gender-select" value="female">
+          <input id="gender-female" type="radio" name="gender-select" value="female" checked>
           <span>Женщина</span>
+        </label>
+        <label class="gender-radio-label" for="gender-male">
+          <input id="gender-male" type="radio" name="gender-select" value="male">
+          <span>Мужчина</span>
         </label>
       </div>
     </div>
@@ -111,7 +106,7 @@
     <!-- Грудь -->
     <div class="control-item">
       <div class="control-header">
-        <label>Обхват Груди</label>
+        <label>Обхват груди</label>
         <input type="number" id="num-body-chest" min="70" max="160" value="100">
       </div>
       <input type="range" id="body-chest" min="70" max="160" value="100">
@@ -120,7 +115,7 @@
     <!-- Талия -->
     <div class="control-item">
       <div class="control-header">
-        <label>Обхват Талии</label>
+        <label>Обхват талии</label>
         <input type="number" id="num-body-waist" min="50" max="160" value="90">
       </div>
       <input type="range" id="body-waist" min="50" max="160" value="90">
@@ -129,7 +124,7 @@
     <!-- Бедра -->
     <div class="control-item">
       <div class="control-header">
-        <label>Обхват Бедер</label>
+        <label>Обхват бедер</label>
         <input type="number" id="num-body-hips" min="70" max="160" value="100">
       </div>
       <input type="range" id="body-hips" min="70" max="160" value="100">
@@ -138,7 +133,7 @@
     <!-- Бицепс -->
     <div class="control-item">
       <div class="control-header">
-        <label>Бицепс</label>
+        <label>Обхват бицепса</label>
         <input type="number" id="num-body-arm" min="20" max="60" value="32">
       </div>
       <input type="range" id="body-arm" min="20" max="60" value="32">
@@ -147,7 +142,7 @@
     <!-- Бедро ноги -->
     <div class="control-item">
       <div class="control-header">
-        <label>Обхват Ноги</label>
+        <label>Обхват ноги</label>
         <input type="number" id="num-body-leg" min="40" max="90" value="55">
       </div>
       <input type="range" id="body-leg" min="40" max="90" value="55">
@@ -261,7 +256,7 @@
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
             <label for="body-scan-weight" style="font-size: 14px;">Вес (кг):</label>
-            <input type="number" id="body-scan-weight" min="35" max="220" value="70" style="width: 60px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+            <input type="number" id="body-scan-weight" min="35" max="220" value="60" style="width: 60px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
           </div>
           <div style="display: flex; align-items: center; gap: 6px;">
             <label for="body-scan-gender" style="font-size: 14px;">Пол:</label>
@@ -291,8 +286,8 @@
         <div class="upload-zone body-scan-upload-zone body-scan-zone-front" id="body-scan-zone-front">
           <div class="body-scan-zone-placeholder" id="body-scan-front-placeholder">
             <span style="font-size: 28px;">📷</span>
-            <p><strong>Фото спереди</strong> (обязательно)</p>
-            <small>Человек стоит прямо, лицом к камере</small>
+            <p><strong>Фото спереди*</strong></p>
+            <small>Вы стоите прямо, лицом к камере</small>
           </div>
           <div class="body-scan-zone-preview" id="body-scan-front-preview" style="display: none;">
             <canvas id="body-scan-canvas"></canvas>
@@ -303,8 +298,8 @@
         <label class="upload-zone body-scan-upload-zone body-scan-upload-side" id="body-scan-zone-side" for="body-image-side-upload-canvas">
           <div class="body-scan-zone-placeholder" id="body-scan-side-placeholder">
             <span style="font-size: 24px;">↔️</span>
-            <p><strong>Фото сбоку</strong> (опционально)</p>
-            <small>Профиль, улучшит точность обхватов</small>
+            <p><strong>Фото сбоку</strong></p>
+            <small>Вы стоите боком к камере</small>
           </div>
           <div class="body-scan-zone-preview" id="body-scan-side-preview" style="display: none;">
             <canvas id="body-scan-canvas-side"></canvas>
@@ -315,16 +310,14 @@
       </div>
 
       <div class="body-scan-toolbar" id="body-scan-toolbar" style="display: none;">
-        <div id="body-scan-instruction" class="instruction-badge">📌 Нажмите «Вычислить параметры»</div>
         <div class="toolbar-actions">
-          <button id="btn-body-compute" class="primary-btn" style="padding: 8px 20px;">Вычислить параметры</button>
-          <button id="btn-body-rescan" class="secondary-btn">Повторить анализ</button>
+          <button id="btn-body-compute" class="primary-btn">Вычислить</button>
         </div>
       </div>
 
       <div id="body-scan-footer" style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
           <span id="body-scan-summary" style="font-size: 13px; color: #555;"></span>
-          <div id="body-scan-params" style="display: none; flex-direction: row; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end;">
+          <div id="body-scan-params" style="display: none; flex-direction: row; flex-wrap: nowrap; gap: 12px; align-items: flex-end;">
             <div style="display: flex; align-items: center; gap: 6px; margin: 0;">
               <label style="min-width: 50px; margin: 0;">Грудь</label>
               <input type="number" id="body-scan-chest" min="70" max="160" placeholder="—" style="width: 55px;">
@@ -344,23 +337,6 @@
             <div style="display: flex; align-items: center; gap: 6px; margin: 0;">
               <label style="min-width: 50px; margin: 0;">Нога</label>
               <input type="number" id="body-scan-leg" min="40" max="90" placeholder="—" style="width: 55px;">
-            </div>
-          </div>
-          <div id="body-scan-calib" class="calib-block" style="display: none; flex-direction: column; gap: 8px; padding: 12px; border-radius: 8px; margin-top: 4px;">
-            <span style="font-size: 13px; font-weight: 600;">Калибровка по известному обхвату</span>
-            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
-              <span style="font-size: 12px;">Я знаю обхват</span>
-              <select id="body-scan-calib-which" style="padding: 4px 8px; font-size: 13px;">
-                <option value="chest">груди</option>
-                <option value="waist">талии</option>
-                <option value="hips">бёдер</option>
-                <option value="arm">бицепса</option>
-                <option value="leg">ноги</option>
-              </select>
-              <span style="font-size: 12px;">=</span>
-              <input type="number" id="body-scan-calib-value" placeholder="см" min="20" max="200" style="width: 60px; padding: 4px 8px;">
-              <span style="font-size: 12px;">см</span>
-              <button id="btn-body-scan-calib" class="secondary-btn" style="padding: 4px 12px;">Применить</button>
             </div>
           </div>
           <span style="font-size: 12px; color: #888;">Скорректируйте значения при необходимости, затем нажмите «Готово».</span>
