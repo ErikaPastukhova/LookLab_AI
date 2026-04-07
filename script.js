@@ -45,7 +45,7 @@ controls.target.set(0, 1.0, 0);
 let humanMesh = null;
 let bonesList = [];
 let modelRoot = null;
-let currentGender = 'male';
+let currentGender = 'female';
 
 const MEASUREMENTS = {
     male: {
@@ -120,7 +120,7 @@ function loadModel(gender) {
     }, undefined, function(e) { console.error(e); });
 }
 
-loadModel('male');
+loadModel('female');
 
 
 // --- UI МЕНЕДЖЕР ---
@@ -836,7 +836,6 @@ document.addEventListener('keydown', (e) => {
     const ctxSide = canvasSide ? canvasSide.getContext('2d') : null;
     const summaryEl = document.getElementById('body-scan-summary');
     const btnCompute = document.getElementById('btn-body-compute');
-    const btnRescan = document.getElementById('btn-body-rescan');
     const btnDone = document.getElementById('btn-body-scan-done');
     const heightInput = document.getElementById('body-scan-height');
     const weightInput = document.getElementById('body-scan-weight');
@@ -848,10 +847,6 @@ document.addEventListener('keydown', (e) => {
         arm: document.getElementById('body-scan-arm'),
         leg: document.getElementById('body-scan-leg')
     };
-    const calibContainer = document.getElementById('body-scan-calib');
-    const calibWhich = document.getElementById('body-scan-calib-which');
-    const calibValue = document.getElementById('body-scan-calib-value');
-    const btnCalib = document.getElementById('btn-body-scan-calib');
 
     if (!btnOpen || !modal || !fileInput || !canvas || !ctx) return;
 
@@ -894,6 +889,13 @@ document.addEventListener('keydown', (e) => {
     const sidePlaceholder = document.getElementById('body-scan-side-placeholder');
     const sidePreviewEl = document.getElementById('body-scan-side-preview');
     const toolbar = document.getElementById('body-scan-toolbar');
+    const getDefaultWeightByGender = (gender) => gender === 'female' ? 60 : 70;
+    const syncDefaultWeight = (gender, force = false) => {
+        if (!weightInput) return;
+        const current = String(weightInput.value || '').trim();
+        const canReplace = force || current === '' || current === '60' || current === '70';
+        if (canReplace) weightInput.value = String(getDefaultWeightByGender(gender));
+    };
 
     btnOpen.onclick = () => {
         modal.style.display = 'flex';
@@ -903,13 +905,11 @@ document.addEventListener('keydown', (e) => {
         summaryEl.textContent = "";
         if (btnDone) btnDone.style.display = 'none';
         if (paramsContainer) paramsContainer.style.display = 'none';
-        if (calibContainer) calibContainer.style.display = 'none';
         if (frontPlaceholder) frontPlaceholder.style.display = 'flex';
         if (frontPreview) frontPreview.style.display = 'none';
         if (sidePlaceholder) sidePlaceholder.style.display = 'flex';
         if (sidePreviewEl) sidePreviewEl.style.display = 'none';
         if (toolbar) toolbar.style.display = 'none';
-        if (calibValue) calibValue.value = '';
         lastLandmarks = null;
         lastLandmarksSide = null;
         lastRawValues = {};
@@ -917,9 +917,10 @@ document.addEventListener('keydown', (e) => {
         img.src = '';
         imgSide.src = '';
         if (heightInput) heightInput.value = inputs.body.height.num.value || "175";
-        if (weightInput && !weightInput.value) weightInput.value = "70";
         const bodyScanGender = document.getElementById('body-scan-gender');
-        if (bodyScanGender && mainGenderInputs.length) bodyScanGender.value = getMainGenderValue();
+        const mainGender = getMainGenderValue();
+        if (bodyScanGender && mainGenderInputs.length) bodyScanGender.value = mainGender;
+        syncDefaultWeight(mainGender, true);
     };
 
     [heightInput, weightInput].filter(Boolean).forEach((el) => {
@@ -930,36 +931,14 @@ document.addEventListener('keydown', (e) => {
     const bodyScanGender = document.getElementById('body-scan-gender');
     [...mainGenderInputs, bodyScanGender].filter(Boolean).forEach((el) => {
         el.addEventListener('change', () => {
+            if (bodyScanGender && mainGenderInputs.includes(el)) {
+                bodyScanGender.value = getMainGenderValue();
+            }
+            const activeGender = bodyScanGender ? bodyScanGender.value : getMainGenderValue();
+            syncDefaultWeight(activeGender, false);
             if (lastLandmarks) applyBodyMeasurementsFromPose(lastLandmarks, lastLandmarksSide);
         });
     });
-
-    if (btnCalib) {
-        btnCalib.onclick = applyCalibration;
-    }
-    if (calibValue) {
-        calibValue.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') applyCalibration();
-        });
-    }
-
-    function applyCalibration() {
-        const key = calibWhich ? calibWhich.value : 'chest';
-        const known = calibValue && calibValue.value ? parseFloat(calibValue.value) : null;
-        if (known == null || isNaN(known) || known <= 0) return;
-        const estimated = lastRawValues[key];
-        if (estimated == null || estimated <= 0) return;
-        const factor = known / estimated;
-        const keys = ['chest', 'waist', 'hips', 'arm', 'leg'];
-        keys.forEach(k => {
-            const el = paramInputs[k];
-            const raw = lastRawValues[k];
-            if (el && raw != null && raw > 0) {
-                const val = k === key ? known : Math.round(raw * factor);
-                el.value = Math.max(0, val);
-            }
-        });
-    }
 
     btnClose.onclick = () => { modal.style.display = 'none'; };
     if (btnDone) btnDone.onclick = () => {
@@ -994,13 +973,6 @@ document.addEventListener('keydown', (e) => {
 
     if (btnCompute) {
         btnCompute.onclick = async () => {
-            if (!img.src) return;
-            drawBodyImage();
-            await runPose();
-        };
-    }
-    if (btnRescan) {
-        btnRescan.onclick = async () => {
             if (!img.src) return;
             drawBodyImage();
             await runPose();
@@ -2197,48 +2169,18 @@ document.addEventListener('keydown', (e) => {
         if (paramInputs.leg)  { paramInputs.leg.value   = leg   != null ? Math.round(leg)   : ''; if (leg)   parts.push('leg');   }
 
         if (paramsContainer) paramsContainer.style.display = parts.length > 0 ? 'flex' : 'none';
-        if (calibContainer) calibContainer.style.display = parts.length > 0 ? 'flex' : 'none';
-        if (calibValue) calibValue.value = '';
-        if (parts.length > 0) {
-            const approximated = Object.keys(methods).filter((k) => methods[k] === 'approx');
-            const precise = Object.keys(methods).filter((k) => methods[k] === 'ellipse');
-            const labels = {
-                chest: 'грудь',
-                waist: 'талия',
-                hips: 'бедра',
-                arm: 'рука',
-                leg: 'нога'
-            };
-            const chunks = [];
-            if (precise.length) {
-                chunks.push(`Эллипс (валидная глубина): ${precise.map((k) => labels[k]).join(', ')}.`);
-            }
-            if (approximated.length) {
-                chunks.push(`Приближенно (без валидной глубины): ${approximated.map((k) => labels[k]).join(', ')}.`);
-            }
-            const statFallbackParts = Object.keys(methods).filter((k) => methods[k] === 'statFallback');
-            if (statFallbackParts.length) {
-                chunks.push(`Fallback-модель: ${statFallbackParts.map((k) => labels[k]).join(', ')}.`);
-            }
-            chunks.push(`Источник бёдер: ${hipSearchSource}, depth=${hipsGeom.depthSource}, mode=${methods.hips || 'none'}.`);
-            chunks.push(`Confidence: грудь ${Math.round(sectionConfidence.chest * 100)}%, талия ${Math.round(sectionConfidence.waist * 100)}%, бёдра ${Math.round(sectionConfidence.hips * 100)}%.`);
-            const reasonsReadable = ['chest', 'waist', 'hips']
-                .filter((k) => qualityReasons[k].length)
-                .map((k) => `${labels[k]}: ${qualityReasons[k].join(', ')}`);
-            if (reasonsReadable.length) {
-                chunks.push(`Причины низкой уверенности — ${reasonsReadable.join(' | ')}.`);
-            }
-            const low = Object.keys(lowConfidence).filter((k) => lowConfidence[k]);
-            if (low.length) {
-                chunks.push(`Низкая уверенность: ${low.map((k) => labels[k]).join(', ')}.`);
-            }
-            if (!waistSpan || !chestSpan || !hipSpan) {
-                chunks.push("Не все уровни сечений найдены по маске торса, проверьте ракурс/фон.");
-            }
-            chunks.push(`BMI: ${profile.bmi.toFixed(1)}. Проверьте и при необходимости скорректируйте значения ниже.`);
-            summaryEl.textContent = chunks.join(' ');
+        const labels = {
+            chest: 'грудь',
+            waist: 'талия',
+            hips: 'бёдра',
+            arm: 'бицепс',
+            leg: 'ногу'
+        };
+        const missingParts = Object.keys(labels).filter((key) => !parts.includes(key));
+        if (missingParts.length > 0) {
+            summaryEl.textContent = `Не удалось определить обхваты: ${missingParts.map((k) => labels[k]).join(', ')}.\nСовет: сфотографируйтесь в полный рост, встаньте прямо, сделайте более ровное освещение и выберите нейтральный фон без лишних объектов.`;
         } else {
-            summaryEl.textContent = "Не удалось надёжно оценить параметры тела.";
+            summaryEl.textContent = "";
         }
         if (btnDone) btnDone.style.display = parts.length > 0 ? 'block' : 'none';
     }
