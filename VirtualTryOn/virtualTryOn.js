@@ -26,10 +26,10 @@ const canvasSize = {
 
 const API_BASE =
   window.VTO_API_BASE ||
-  `${window.location.protocol}//${window.location.hostname}:8000/api/v1`;
+  'http://111.88.244.171:8000/api/v1';
 
 const POLL_INTERVAL_MS = 2000;
-const POLL_ATTEMPTS = 60;
+const POLL_ATTEMPTS = 180;
 
 let sourcePhotoFile = null;
 let currentCatalog = [];
@@ -264,7 +264,6 @@ async function loadCatalogFromApi() {
 
 async function loadImageFromUrl(url) {
   const img = new Image();
-  img.crossOrigin = 'anonymous';
   img.decoding = 'async';
   img.src = url;
   await new Promise((resolve, reject) => {

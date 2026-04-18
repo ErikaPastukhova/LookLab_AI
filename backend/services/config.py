@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     ai_http_endpoint: str = ""
     ai_http_token: str = ""
     ai_http_timeout_seconds: int = 120
+    ai_ensure_running_url: str = ""
+    ai_ensure_poll_seconds: int = 5
+    ai_ensure_max_wait_seconds: int = 180
 
 
 @lru_cache

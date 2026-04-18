@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import io
+import time
 
 import httpx
 from PIL import Image, ImageEnhance, ImageOps
@@ -60,6 +62,36 @@ class HttpAIProvider(AIProvider):
         self._endpoint = settings.ai_http_endpoint
         self._token = settings.ai_http_token
         self._timeout = settings.ai_http_timeout_seconds
+        self._ensure_running_url = settings.ai_ensure_running_url
+        self._ensure_poll_seconds = settings.ai_ensure_poll_seconds
+        self._ensure_max_wait_seconds = settings.ai_ensure_max_wait_seconds
+
+    async def _wait_gpu_ready(self, client: httpx.AsyncClient, headers: dict[str, str]) -> None:
+        if not self._ensure_running_url:
+            return
+
+        deadline = time.monotonic() + max(1, self._ensure_max_wait_seconds)
+        poll_interval = max(1, self._ensure_poll_seconds)
+        last_status = "unknown"
+        while time.monotonic() < deadline:
+            response = await client.post(self._ensure_running_url, headers=headers)
+            if response.status_code >= 400:
+                response.raise_for_status()
+
+            payload = {}
+            try:
+                payload = response.json()
+            except Exception:
+                payload = {}
+            if isinstance(payload, dict):
+                last_status = str(payload.get("status", last_status))
+                if payload.get("ready") is True:
+                    return
+            if response.status_code == 200:
+                return
+            await asyncio.sleep(poll_interval)
+
+        raise RuntimeError(f"GPU is not ready for inference (last status: {last_status}).")
 
     async def generate_tryon(
         self,
@@ -78,6 +110,7 @@ class HttpAIProvider(AIProvider):
             headers["Authorization"] = f"Bearer {self._token}"
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
+            await self._wait_gpu_ready(client, headers)
             response = await client.post(
                 self._endpoint,
                 headers=headers,
