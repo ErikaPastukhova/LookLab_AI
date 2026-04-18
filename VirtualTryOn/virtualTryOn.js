@@ -64,6 +64,13 @@ function setRendering(isRendering, text = 'Генерируем результа
   elements.statusRendering.textContent = text;
 }
 
+function updatePreviewOverlayVisibility() {
+  if (!elements.previewEmpty) return;
+  const shouldShow = !state.getPhoto() && !generatedPreviewImage;
+  elements.previewEmpty.hidden = !shouldShow;
+  elements.previewEmpty.style.display = shouldShow ? '' : 'none';
+}
+
 function updateGenerateButtonState() {
   if (!elements.generateButton) return;
   const hasPhoto = !!state.getPhoto();
@@ -108,7 +115,7 @@ async function renderCurrent() {
     elements.catalogHint.hidden = !hasPhoto || hasSelectedItem;
   }
 
-  elements.previewEmpty.hidden = hasPhoto;
+  updatePreviewOverlayVisibility();
   if (!hasPhoto) return;
 
   const photo = state.getPhoto();
@@ -447,7 +454,7 @@ async function boot() {
   initCatalog(items);
 
   // Default: no photo yet.
-  elements.previewEmpty.hidden = false;
+  updatePreviewOverlayVisibility();
 
   prepareCanvasForRender();
   setupUploadHandlers();
