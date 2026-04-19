@@ -1,0 +1,73 @@
+openapi: 3.0.0
+info:
+  title: Online Mannequin API Gateway
+  version: 1.0.0
+servers:
+  - url: https://d5dnmn8hm7jc5rsrfis2.nkhmighe.apigw.yandexcloud.net
+paths:
+  /:
+    get:
+      x-yc-apigateway-integration:
+        type: dummy
+        content:
+          "*": Hello, World!
+        http_code: 200
+        http_headers:
+          Content-Type: text/plain
+
+  /gpu/ensure_running:
+    post:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: d4eok18j6vs3a67f2tau
+        tag: $latest
+        payload_format_version: "2.0"
+        service_account_id: aje9cilbvgqq07bv0ueu
+
+  /api/v1/catalog/items:
+    get:
+      x-yc-apigateway-integration:
+        type: http
+        method: GET
+        url: http://10.128.0.14:8000/api/v1/catalog/items
+        headers:
+          "*": "*"
+
+  /api/v1/tryon/jobs:
+    post:
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - garment_item_id
+                - person_image
+              properties:
+                garment_item_id:
+                  type: string
+                person_image:
+                  type: string
+                  format: binary
+      x-yc-apigateway-integration:
+        type: http
+        method: POST
+        url: http://10.128.0.14:8000/api/v1/tryon/jobs
+        headers:
+          "*": "*"
+
+  /api/v1/tryon/jobs/{job_id}:
+    get:
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+      x-yc-apigateway-integration:
+        type: http
+        method: GET
+        url: http://10.128.0.14:8000/api/v1/tryon/jobs/{job_id}
+        headers:
+          "*": "*"
