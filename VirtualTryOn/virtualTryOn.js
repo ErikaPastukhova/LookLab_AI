@@ -26,10 +26,12 @@ const canvasSize = {
 
 const API_BASE =
   window.VTO_API_BASE ||
-  'http://111.88.244.171:8000/api/v1';
+  'https://d5dnmn8hm7jc5rsrfis2.nkhmighe.apigw.yandexcloud.net/api/v1';
+
+const CATALOG_REQUEST_TIMEOUT_MS = 8000;
 
 const POLL_INTERVAL_MS = 2000;
-const POLL_ATTEMPTS = 180;
+const POLL_ATTEMPTS = 300;
 
 let sourcePhotoFile = null;
 let currentCatalog = [];
@@ -80,28 +82,17 @@ function updateGenerateButtonState() {
   elements.generateButton.disabled = !hasPhoto || !hasSelectedItem || isBusy;
 }
 
-function drawImageCover(ctx, w, h, img) {
-  const imgRatio = img.width / img.height;
-  const canvasRatio = w / h;
+function drawImageContain(ctx, w, h, img) {
+  const scale = Math.min(w / img.width, h / img.height);
+  const drawWidth = img.width * scale;
+  const drawHeight = img.height * scale;
+  const dx = (w - drawWidth) / 2;
+  const dy = (h - drawHeight) / 2;
 
-  let sx = 0;
-  let sy = 0;
-  let sw = img.width;
-  let sh = img.height;
-
-  if (imgRatio > canvasRatio) {
-    sh = img.height;
-    sw = sh * canvasRatio;
-    sx = (img.width - sw) / 2;
-  } else {
-    sw = img.width;
-    sh = sw / canvasRatio;
-    sy = (img.height - sh) / 2;
-  }
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = 'rgba(248,250,252,1)';
   ctx.fillRect(0, 0, w, h);
-  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+  ctx.drawImage(img, dx, dy, drawWidth, drawHeight);
 }
 
 async function renderCurrent() {
@@ -127,11 +118,11 @@ async function renderCurrent() {
   if (!w || !h) return;
 
   if (generatedPreviewImage) {
-    drawImageCover(ctx, w, h, generatedPreviewImage);
+    drawImageContain(ctx, w, h, generatedPreviewImage);
     return;
   }
 
-  drawImageCover(ctx, w, h, photo);
+  drawImageContain(ctx, w, h, photo);
 }
 
 function prepareCanvasForRender() {
@@ -257,8 +248,11 @@ async function loadImageFromFile(file) {
 }
 
 async function loadCatalogFromApi() {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), CATALOG_REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(`${API_BASE}/catalog/items`);
+    // Do not let a stalled catalog request block the rest of the page startup.
+    const response = await fetch(`${API_BASE}/catalog/items`, { signal: controller.signal });
     if (!response.ok) throw new Error('Не удалось получить каталог.');
     const data = await response.json();
     if (!Array.isArray(data.items) || !data.items.length) throw new Error('Каталог пуст.');
@@ -266,6 +260,8 @@ async function loadCatalogFromApi() {
   } catch (err) {
     console.warn('Catalog API unavailable, fallback to mock catalog.', err);
     return getMockCatalog();
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 }
 
@@ -344,7 +340,7 @@ async function runTryOnGeneration() {
       }
     }
 
-    throw new Error('Превышено время ожидания результата. Попробуйте снова.');
+    throw new Error('Превышено время ожидания результата. При первом запуске GPU может стартовать дольше, попробуйте снова чуть позже.');
   } catch (err) {
     // Optional visual fallback so user always sees a result in local demo.
     try {
@@ -449,20 +445,20 @@ function setupResize() {
 }
 
 async function boot() {
-  const items = await loadCatalogFromApi();
   ensureCategories();
-  initCatalog(items);
-
-  // Default: no photo yet.
-  updatePreviewOverlayVisibility();
-
   prepareCanvasForRender();
   setupUploadHandlers();
   setupResize();
   elements.generateButton?.addEventListener('click', async () => {
     await runTryOnGeneration();
   });
+
+  // Default: no photo yet.
+  updatePreviewOverlayVisibility();
   updateGenerateButtonState();
+
+  const items = await loadCatalogFromApi();
+  initCatalog(items);
 }
 
 boot();
