@@ -8,15 +8,25 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xe0e0e0);
 scene.fog = new THREE.Fog(0xe0e0e0, 5, 20);
 
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 100);
+const canvasContainer = document.getElementById('canvas-container');
+const getRenderRect = () => (canvasContainer ? canvasContainer.getBoundingClientRect() : null);
+const getRenderSize = () => {
+    const rect = getRenderRect();
+    const w = rect ? Math.max(1, Math.floor(rect.width)) : window.innerWidth;
+    const h = rect ? Math.max(1, Math.floor(rect.height)) : window.innerHeight;
+    return { w, h };
+};
+
+const initialSize = getRenderSize();
+const camera = new THREE.PerspectiveCamera(50, initialSize.w / initialSize.h, 0.1, 100);
 camera.position.set(0, 1.1, 3.2);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(initialSize.w, initialSize.h);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
-document.getElementById('canvas-container').appendChild(renderer.domElement);
+if (canvasContainer) canvasContainer.appendChild(renderer.domElement);
 
 // СВЕТ
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -39,6 +49,38 @@ scene.add(plane);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.target.set(0, 1.0, 0); 
+
+// --- CAMERA FRAMING (keep mannequin centered) ---
+let modelBounds = null; // { center: THREE.Vector3, size: THREE.Vector3 }
+function getScaledBounds() {
+    if (!modelRoot || !modelBounds) return null;
+    const s = modelRoot.scale;
+    const center = modelBounds.center.clone().multiply(s).add(modelRoot.position);
+    const size = modelBounds.size.clone().multiply(s);
+    return { center, size };
+}
+
+function frameModelFront() {
+    const b = getScaledBounds();
+    if (!b) return;
+
+    // Center orbit around the model.
+    controls.target.copy(b.center);
+
+    // Fit distance based on model size and camera fov.
+    const maxDim = Math.max(b.size.x, b.size.y, b.size.z);
+    const fov = (camera.fov * Math.PI) / 180;
+    const fitDist = (maxDim * 0.55) / Math.tan(fov / 2);
+    const dist = Math.max(2.2, fitDist) * 1.18;
+
+    // Slightly above center feels more natural for full-body framing.
+    camera.position.set(b.center.x, b.center.y + b.size.y * 0.08, b.center.z + dist);
+
+    camera.near = Math.max(0.05, dist / 60);
+    camera.far = Math.max(50, dist * 6);
+    camera.updateProjectionMatrix();
+    controls.update();
+}
 
 
 // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
@@ -78,6 +120,18 @@ function loadModel(gender) {
         scene.add(modelRoot);
         modelRoot.updateMatrixWorld(true);
 
+        // Cache base bounds for framing (no expensive bbox during slider moves).
+        try {
+            const box = new THREE.Box3().setFromObject(modelRoot);
+            const center = new THREE.Vector3();
+            const size = new THREE.Vector3();
+            box.getCenter(center);
+            box.getSize(size);
+            modelBounds = { center, size };
+        } catch (e) {
+            modelBounds = null;
+        }
+
         // Ищем главный меш
         let meshFound = false;
 
@@ -116,6 +170,7 @@ function loadModel(gender) {
         });
 
         if (humanMesh) updateAll();
+        frameModelFront();
 
     }, undefined, function(e) { console.error(e); });
 }
@@ -232,6 +287,14 @@ function updateAll() {
 
     // 4. Раскраска
     updateColors(body);
+}
+
+// Re-frame when height changes (scale affects visual centering).
+if (inputs?.body?.height?.range) {
+    inputs.body.height.range.addEventListener('input', () => frameModelFront());
+}
+if (inputs?.body?.height?.num) {
+    inputs.body.height.num.addEventListener('input', () => frameModelFront());
 }
 
 
@@ -361,9 +424,10 @@ function animate() {
 animate();
 
 function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const { w, h } = getRenderSize();
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(w, h);
 }
 
 window.addEventListener('resize', onWindowResize);
@@ -378,6 +442,168 @@ document.querySelectorAll('.accordion-toggle').forEach(toggle => {
         if (section) section.classList.toggle('expanded');
     });
 });
+
+// --- MOBILE: bottom-sheet with tabs (demo.html) ---
+function initMobileBottomSheet() {
+    const mq = window.matchMedia && window.matchMedia('(max-width: 768px)');
+    if (!mq || !mq.matches) return;
+
+    const sheet = document.getElementById('mobile-sheet');
+    const handle = document.getElementById('mobile-sheet-handle');
+    const tabCloth = document.getElementById('mobile-tab-cloth');
+    const tabBody = document.getElementById('mobile-tab-body');
+    const panelCloth = document.getElementById('mobile-tabpanel-cloth');
+    const panelBody = document.getElementById('mobile-tabpanel-body');
+    const leftPanel = document.getElementById('left-panel');
+    const uiPanel = document.getElementById('ui-panel');
+
+    if (!sheet || !handle || !tabCloth || !tabBody || !panelCloth || !panelBody || !leftPanel || !uiPanel) return;
+
+    sheet.hidden = false;
+
+    // Move existing DOM blocks so all listeners keep working.
+    if (!panelCloth.contains(leftPanel)) panelCloth.appendChild(leftPanel);
+    if (!panelBody.contains(uiPanel)) panelBody.appendChild(uiPanel);
+
+    const setExpanded = (expanded) => {
+        sheet.classList.toggle('is-expanded', !!expanded);
+        document.body.classList.toggle('mobile-sheet-expanded', !!expanded);
+    };
+
+    const isExpanded = () => sheet.classList.contains('is-expanded');
+
+    const setTab = (tab) => {
+        const isCloth = tab === 'cloth';
+        tabCloth.classList.toggle('is-active', isCloth);
+        tabBody.classList.toggle('is-active', !isCloth);
+        tabCloth.setAttribute('aria-selected', isCloth ? 'true' : 'false');
+        tabBody.setAttribute('aria-selected', !isCloth ? 'true' : 'false');
+        panelCloth.hidden = !isCloth;
+        panelBody.hidden = isCloth;
+    };
+
+    // Defaults.
+    setExpanded(false);
+    setTab('cloth');
+
+    handle.addEventListener('click', () => setExpanded(!isExpanded()));
+    tabCloth.addEventListener('click', () => { setTab('cloth'); setExpanded(true); });
+    tabBody.addEventListener('click', () => { setTab('body'); setExpanded(true); });
+
+    // Drag (pull) to expand/collapse.
+    let drag = null;
+    const getPeekPx = () => {
+        const raw = getComputedStyle(document.documentElement).getPropertyValue('--mobile-sheet-peek').trim();
+        const n = parseFloat(raw);
+        return isFinite(n) ? n : 124;
+    };
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+    const getCollapsedTranslateY = () => {
+        const peek = getPeekPx();
+        return Math.max(0, sheet.offsetHeight - peek);
+    };
+
+    const setTranslateY = (y) => {
+        sheet.style.transition = 'none';
+        sheet.style.transform = `translateY(${Math.round(y)}px)`;
+    };
+
+    const clearInlineTransform = () => {
+        sheet.style.transition = '';
+        sheet.style.transform = '';
+    };
+
+    const shouldStartSheetDrag = (e) => {
+        const t = e.target;
+        if (!(t instanceof Element)) return true;
+        const bodyEl = document.getElementById('mobile-sheet-body');
+        if (!bodyEl) return true;
+
+        // If user interacts inside scrollable body and it can scroll, prefer scrolling over dragging.
+        const insideBody = bodyEl.contains(t);
+        if (!insideBody) return true;
+
+        const canScroll = bodyEl.scrollHeight > bodyEl.clientHeight + 2;
+        if (!canScroll) return true;
+
+        // Allow drag from body only when already at top (so downward pull can close),
+        // otherwise keep normal scroll behavior.
+        return bodyEl.scrollTop <= 0;
+    };
+
+    const startDrag = (e, captureEl) => {
+        // Only primary touch/mouse.
+        if (e.button != null && e.button !== 0) return;
+        drag = {
+            pointerId: e.pointerId,
+            startY: e.clientY,
+            startTime: performance.now(),
+            baseY: isExpanded() ? 0 : getCollapsedTranslateY(),
+            lastY: e.clientY,
+            lastTime: performance.now(),
+            moved: false
+        };
+        try { captureEl.setPointerCapture(e.pointerId); } catch (_) {}
+    };
+
+    const onPointerMove = (e) => {
+        if (!drag || drag.pointerId !== e.pointerId) return;
+        const dy = e.clientY - drag.startY;
+        if (Math.abs(dy) > 3) drag.moved = true;
+
+        const collapsed = getCollapsedTranslateY();
+        const nextY = clamp(drag.baseY + dy, 0, collapsed);
+        setTranslateY(nextY);
+
+        drag.lastY = e.clientY;
+        drag.lastTime = performance.now();
+        e.preventDefault();
+    };
+
+    const finishDrag = (e) => {
+        if (!drag || drag.pointerId !== e.pointerId) return;
+        const collapsed = getCollapsedTranslateY();
+        const elapsed = Math.max(1, performance.now() - drag.lastTime);
+        const velocity = (e.clientY - drag.lastY) / elapsed; // px/ms
+
+        // Decide target state.
+        const currentDy = e.clientY - drag.startY;
+        const currentY = clamp(drag.baseY + currentDy, 0, collapsed);
+        const shouldExpand =
+            velocity < -0.25 || currentY < collapsed * 0.5;
+
+        drag = null;
+        clearInlineTransform();
+        setExpanded(shouldExpand);
+    };
+
+    handle.addEventListener('pointerdown', (e) => startDrag(e, handle));
+    handle.addEventListener('pointermove', onPointerMove);
+    handle.addEventListener('pointerup', finishDrag);
+    handle.addEventListener('pointercancel', finishDrag);
+
+    // Allow dragging by pulling the sheet itself (not only the handle).
+    sheet.addEventListener('pointerdown', (e) => {
+        if (!shouldStartSheetDrag(e)) return;
+        startDrag(e, sheet);
+    });
+    sheet.addEventListener('pointermove', onPointerMove);
+    sheet.addEventListener('pointerup', finishDrag);
+    sheet.addEventListener('pointercancel', finishDrag);
+
+    // Keep sheet usable after orientation changes, etc.
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) return;
+        sheet.hidden = false;
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMobileBottomSheet);
+} else {
+    initMobileBottomSheet();
+}
 
 // --- ESCAPE ДЛЯ ЗАКРЫТИЯ МОДАЛОК ---
 document.addEventListener('keydown', (e) => {
@@ -408,6 +634,77 @@ document.addEventListener('keydown', (e) => {
     const btnSkip = document.getElementById('btn-skip-step');
     const btnUndo = document.getElementById('btn-undo');
     const btnConfirm = document.getElementById('btn-confirm-step');
+
+    // Custom dropdown for clothing type (same UI as body-scan select).
+    (function initMeasureClothingTypeDropdown() {
+        if (!typeSelect) return;
+        const trigger = document.getElementById('measure-clothing-trigger');
+        const valueEl = document.getElementById('measure-clothing-value');
+        const menu = document.getElementById('measure-clothing-menu');
+        if (!trigger || !valueEl || !menu) return;
+
+        function syncTriggerFromSelect() {
+            const selected = typeSelect.selectedOptions?.[0];
+            valueEl.textContent = selected?.textContent || '';
+        }
+
+        function closeMenu() {
+            menu.hidden = true;
+            trigger.setAttribute('aria-expanded', 'false');
+        }
+
+        function openMenu() {
+            menu.hidden = false;
+            trigger.setAttribute('aria-expanded', 'true');
+        }
+
+        function toggleMenu() {
+            const isOpen = !menu.hidden;
+            if (isOpen) closeMenu();
+            else openMenu();
+        }
+
+        function rebuildMenuFromSelect() {
+            menu.innerHTML = '';
+            const currentValue = typeSelect.value;
+
+            for (const opt of typeSelect.options) {
+                const el = document.createElement('div');
+                el.className = 'body-scan-select-option';
+                el.setAttribute('role', 'option');
+                el.dataset.value = opt.value;
+                el.textContent = opt.textContent || opt.value;
+                el.setAttribute('aria-selected', opt.value === currentValue ? 'true' : 'false');
+                el.addEventListener('click', () => {
+                    typeSelect.value = opt.value;
+                    typeSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                    syncTriggerFromSelect();
+                    rebuildMenuFromSelect();
+                    closeMenu();
+                });
+                menu.appendChild(el);
+            }
+        }
+
+        trigger.addEventListener('click', toggleMenu);
+        document.addEventListener('click', (e) => {
+            const t = e.target;
+            if (!(t instanceof Node)) return;
+            if (menu.contains(t) || trigger.contains(t)) return;
+            closeMenu();
+        });
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeMenu();
+        });
+        typeSelect.addEventListener('change', () => {
+            syncTriggerFromSelect();
+            rebuildMenuFromSelect();
+        });
+
+        syncTriggerFromSelect();
+        rebuildMenuFromSelect();
+        closeMenu();
+    })();
 
     // Toast уведомления
     const toast = document.createElement('div');
@@ -939,6 +1236,77 @@ document.addEventListener('keydown', (e) => {
             if (lastLandmarks) applyBodyMeasurementsFromPose(lastLandmarks, lastLandmarksSide);
         });
     });
+
+    // Custom dropdown for gender (like VirtualTryOn).
+    (function initBodyScanGenderDropdown() {
+        if (!bodyScanGender) return;
+        const trigger = document.getElementById('body-scan-gender-trigger');
+        const valueEl = document.getElementById('body-scan-gender-value');
+        const menu = document.getElementById('body-scan-gender-menu');
+        if (!trigger || !valueEl || !menu) return;
+
+        function syncTriggerFromSelect() {
+            const selected = bodyScanGender.selectedOptions?.[0];
+            valueEl.textContent = selected?.textContent || '';
+        }
+
+        function closeMenu() {
+            menu.hidden = true;
+            trigger.setAttribute('aria-expanded', 'false');
+        }
+
+        function openMenu() {
+            menu.hidden = false;
+            trigger.setAttribute('aria-expanded', 'true');
+        }
+
+        function toggleMenu() {
+            const isOpen = !menu.hidden;
+            if (isOpen) closeMenu();
+            else openMenu();
+        }
+
+        function rebuildMenuFromSelect() {
+            menu.innerHTML = '';
+            const currentValue = bodyScanGender.value;
+
+            for (const opt of bodyScanGender.options) {
+                const el = document.createElement('div');
+                el.className = 'body-scan-select-option';
+                el.setAttribute('role', 'option');
+                el.dataset.value = opt.value;
+                el.textContent = opt.textContent || opt.value;
+                el.setAttribute('aria-selected', opt.value === currentValue ? 'true' : 'false');
+                el.addEventListener('click', () => {
+                    bodyScanGender.value = opt.value;
+                    bodyScanGender.dispatchEvent(new Event('change', { bubbles: true }));
+                    syncTriggerFromSelect();
+                    rebuildMenuFromSelect();
+                    closeMenu();
+                });
+                menu.appendChild(el);
+            }
+        }
+
+        trigger.addEventListener('click', toggleMenu);
+        document.addEventListener('click', (e) => {
+            const t = e.target;
+            if (!(t instanceof Node)) return;
+            if (menu.contains(t) || trigger.contains(t)) return;
+            closeMenu();
+        });
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeMenu();
+        });
+        bodyScanGender.addEventListener('change', () => {
+            syncTriggerFromSelect();
+            rebuildMenuFromSelect();
+        });
+
+        syncTriggerFromSelect();
+        rebuildMenuFromSelect();
+        closeMenu();
+    })();
 
     btnClose.onclick = () => { modal.style.display = 'none'; };
     if (btnDone) btnDone.onclick = () => {
