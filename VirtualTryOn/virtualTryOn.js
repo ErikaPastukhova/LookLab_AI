@@ -10,6 +10,9 @@ const elements = {
   statusError: document.getElementById('vto-status-error'),
 
   categorySelect: document.getElementById('vto-category-select'),
+  categoryTrigger: document.getElementById('vto-category-trigger'),
+  categoryValue: document.getElementById('vto-category-value'),
+  categoryMenu: document.getElementById('vto-category-menu'),
   catalog: document.getElementById('vto-catalog'),
   catalogHint: document.getElementById('vto-catalog-hint'),
 
@@ -149,6 +152,75 @@ function ensureCategories() {
     option.textContent = cat.label;
     elements.categorySelect.appendChild(option);
   }
+}
+
+function setupCategoryDropdown() {
+  if (!elements.categorySelect || !elements.categoryTrigger || !elements.categoryMenu || !elements.categoryValue) return;
+
+  function syncTriggerFromSelect() {
+    const selected = elements.categorySelect.selectedOptions?.[0];
+    elements.categoryValue.textContent = selected?.textContent || 'Все';
+  }
+
+  function closeMenu() {
+    elements.categoryMenu.hidden = true;
+    elements.categoryTrigger.setAttribute('aria-expanded', 'false');
+  }
+
+  function openMenu() {
+    elements.categoryMenu.hidden = false;
+    elements.categoryTrigger.setAttribute('aria-expanded', 'true');
+  }
+
+  function toggleMenu() {
+    const isOpen = !elements.categoryMenu.hidden;
+    if (isOpen) closeMenu();
+    else openMenu();
+  }
+
+  function rebuildMenuFromSelect() {
+    elements.categoryMenu.innerHTML = '';
+    const currentValue = elements.categorySelect.value;
+
+    for (const opt of elements.categorySelect.options) {
+      const el = document.createElement('div');
+      el.className = 'vto-select-option';
+      el.setAttribute('role', 'option');
+      el.dataset.value = opt.value;
+      el.textContent = opt.textContent || opt.value;
+      el.setAttribute('aria-selected', opt.value === currentValue ? 'true' : 'false');
+      el.addEventListener('click', () => {
+        elements.categorySelect.value = opt.value;
+        elements.categorySelect.dispatchEvent(new Event('change', { bubbles: true }));
+        syncTriggerFromSelect();
+        rebuildMenuFromSelect();
+        closeMenu();
+      });
+      elements.categoryMenu.appendChild(el);
+    }
+  }
+
+  elements.categoryTrigger.addEventListener('click', toggleMenu);
+
+  document.addEventListener('click', (e) => {
+    const t = e.target;
+    if (!(t instanceof Node)) return;
+    if (elements.categoryMenu.contains(t) || elements.categoryTrigger.contains(t)) return;
+    closeMenu();
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMenu();
+  });
+
+  elements.categorySelect.addEventListener('change', () => {
+    syncTriggerFromSelect();
+    rebuildMenuFromSelect();
+  });
+
+  syncTriggerFromSelect();
+  rebuildMenuFromSelect();
+  closeMenu();
 }
 
 function renderCatalog(items) {
@@ -446,6 +518,7 @@ function setupResize() {
 
 async function boot() {
   ensureCategories();
+  setupCategoryDropdown();
   prepareCanvasForRender();
   setupUploadHandlers();
   setupResize();

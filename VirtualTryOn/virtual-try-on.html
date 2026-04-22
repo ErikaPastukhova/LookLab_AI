@@ -8,7 +8,10 @@
 </head>
 <body>
   <header class="vto-header">
-    <a href="../index.html" class="vto-back-link">← На главную</a>
+    <a href="../index.html" class="vto-back-link" aria-label="На главную">
+      <span class="vto-back-icon" aria-hidden="true">←</span>
+      <span class="vto-back-text">На главную</span>
+    </a>
     <div class="vto-title">Виртуальная примерка</div>
     <div class="vto-header-spacer"></div>
   </header>
@@ -43,9 +46,30 @@
         <h2 class="vto-card-title">Выбор одежды</h2>
         <div class="vto-catalog-controls">
           <label class="vto-select-label" for="vto-category-select">Категория</label>
-          <select id="vto-category-select" class="vto-select">
-            <option value="all">Все</option>
-          </select>
+          <div class="vto-select-wrap">
+            <select id="vto-category-select" class="vto-select vto-select--native">
+              <option value="all">Все</option>
+            </select>
+
+            <button
+              id="vto-category-trigger"
+              class="vto-select-trigger"
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded="false"
+            >
+              <span id="vto-category-value" class="vto-select-value">Все</span>
+              <span class="vto-select-chevron" aria-hidden="true"></span>
+            </button>
+
+            <div
+              id="vto-category-menu"
+              class="vto-select-menu"
+              role="listbox"
+              aria-label="Категория"
+              hidden
+            ></div>
+          </div>
         </div>
 
         <div id="vto-catalog" class="vto-catalog-grid"></div>
