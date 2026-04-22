@@ -446,7 +446,7 @@ document.querySelectorAll('.accordion-toggle').forEach(toggle => {
 // --- MOBILE: bottom-sheet with tabs (demo.html) ---
 function initMobileBottomSheet() {
     const mq = window.matchMedia && window.matchMedia('(max-width: 768px)');
-    if (!mq || !mq.matches) return;
+    if (!mq || !mq.matches) return false;
 
     const sheet = document.getElementById('mobile-sheet');
     const handle = document.getElementById('mobile-sheet-handle');
@@ -457,9 +457,15 @@ function initMobileBottomSheet() {
     const leftPanel = document.getElementById('left-panel');
     const uiPanel = document.getElementById('ui-panel');
 
-    if (!sheet || !handle || !tabCloth || !tabBody || !panelCloth || !panelBody || !leftPanel || !uiPanel) return;
+    if (!sheet || !handle || !tabCloth || !tabBody || !panelCloth || !panelBody || !leftPanel || !uiPanel) return false;
 
     sheet.hidden = false;
+
+    // Prevent duplicate listener wiring if init runs multiple times.
+    if (sheet.dataset.mobileInit === '1') {
+        return true;
+    }
+    sheet.dataset.mobileInit = '1';
 
     // Move existing DOM blocks so all listeners keep working.
     if (!panelCloth.contains(leftPanel)) panelCloth.appendChild(leftPanel);
@@ -597,12 +603,39 @@ function initMobileBottomSheet() {
         if (window.innerWidth > 768) return;
         sheet.hidden = false;
     });
+
+    return true;
+}
+
+function setupMobileBottomSheetAutoInit() {
+    const mq = window.matchMedia && window.matchMedia('(max-width: 768px)');
+    if (!mq) return;
+
+    const tryInit = () => {
+        // Retry a few times because on some mobile browsers viewport width settles after first paint.
+        initMobileBottomSheet();
+    };
+
+    // Try immediately and after paint.
+    tryInit();
+    requestAnimationFrame(tryInit);
+    setTimeout(tryInit, 0);
+    setTimeout(tryInit, 250);
+
+    // React to viewport/orientation changes.
+    window.addEventListener('pageshow', tryInit);
+    window.addEventListener('orientationchange', tryInit);
+
+    // React to media query changes.
+    const onMqChange = () => tryInit();
+    if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onMqChange);
+    else if (typeof mq.addListener === 'function') mq.addListener(onMqChange);
 }
 
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initMobileBottomSheet);
+    document.addEventListener('DOMContentLoaded', setupMobileBottomSheetAutoInit);
 } else {
-    initMobileBottomSheet();
+    setupMobileBottomSheetAutoInit();
 }
 
 // --- ESCAPE ДЛЯ ЗАКРЫТИЯ МОДАЛОК ---

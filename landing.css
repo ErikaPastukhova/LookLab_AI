@@ -707,4 +707,12 @@ h3 {
   .landing-back-text {
     display: none;
   }
+
+  .landing-back-link {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+  }
 }
