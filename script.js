@@ -611,9 +611,24 @@ function setupMobileBottomSheetAutoInit() {
     const mq = window.matchMedia && window.matchMedia('(max-width: 768px)');
     if (!mq) return;
 
-    const tryInit = () => {
-        // Retry a few times because on some mobile browsers viewport width settles after first paint.
-        initMobileBottomSheet();
+    let timer = null;
+    let attempts = 0;
+    const maxAttempts = 30; // ~3s with 100ms interval
+
+    const tryInit = () => initMobileBottomSheet();
+
+    const stopPolling = () => {
+        if (timer) window.clearInterval(timer);
+        timer = null;
+    };
+
+    const startPolling = () => {
+        if (timer) return;
+        timer = window.setInterval(() => {
+            attempts += 1;
+            const ok = tryInit();
+            if (ok || attempts >= maxAttempts) stopPolling();
+        }, 100);
     };
 
     // Try immediately and after paint.
@@ -621,13 +636,15 @@ function setupMobileBottomSheetAutoInit() {
     requestAnimationFrame(tryInit);
     setTimeout(tryInit, 0);
     setTimeout(tryInit, 250);
+    startPolling();
 
     // React to viewport/orientation changes.
-    window.addEventListener('pageshow', tryInit);
-    window.addEventListener('orientationchange', tryInit);
+    window.addEventListener('pageshow', () => { attempts = 0; tryInit(); startPolling(); });
+    window.addEventListener('orientationchange', () => { attempts = 0; tryInit(); startPolling(); });
+    window.addEventListener('resize', () => { attempts = 0; tryInit(); startPolling(); });
 
     // React to media query changes.
-    const onMqChange = () => tryInit();
+    const onMqChange = () => { attempts = 0; tryInit(); startPolling(); };
     if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onMqChange);
     else if (typeof mq.addListener === 'function') mq.addListener(onMqChange);
 }
