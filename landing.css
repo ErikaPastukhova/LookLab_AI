@@ -459,10 +459,38 @@ h3 {
     grid-template-columns: 1fr;
   }
 
+  .section-why .cards {
+    grid-template-columns: 1fr;
+  }
+
+  .section-how .steps {
+    grid-template-columns: 1fr;
+  }
+
   .cards .card,
   .steps .step {
     grid-column: auto;
     min-height: 0;
+  }
+
+  .cards .card:nth-child(1),
+  .cards .card:nth-child(2),
+  .cards .card:nth-child(3),
+  .steps .step:nth-child(1),
+  .steps .step:nth-child(2),
+  .steps .step:nth-child(3) {
+    grid-column: auto;
+    width: 100%;
+  }
+
+  .section-soon .cards .card {
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .section-soon .cards .card p {
+    margin-top: auto;
   }
 }
 
@@ -472,7 +500,11 @@ h3 {
   }
 
   .section h2 {
-    font-size: 38px;
+    font-size: 32px;
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    hyphens: none;
   }
 
   .request-form {
