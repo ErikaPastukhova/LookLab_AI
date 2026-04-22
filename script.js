@@ -50,11 +50,11 @@ let currentGender = 'female';
 const MEASUREMENTS = {
     male: {
         base: { chest: 96, waist: 82, hips: 100, arm: 32, leg: 55 },
-        fat:  { chest: 128, waist: 130, hips: 126, arm: 45, leg: 75 }
+        fat:  { chest: 148, waist: 150, hips: 146, arm: 85, leg: 95 }
     },
     female: {
         base: { chest: 86, waist: 68, hips: 94, arm: 28, leg: 52 },
-        fat:  { chest: 115, waist: 100, hips: 120, arm: 40, leg: 72 }
+        fat:  { chest: 145, waist: 160, hips: 160, arm: 80, leg: 92 }
     }
 };
 
