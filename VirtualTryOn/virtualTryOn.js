@@ -49,6 +49,15 @@ const CATALOG_REQUEST_TIMEOUT_MS = 8000;
 const POLL_INTERVAL_MS = 2000;
 const POLL_ATTEMPTS = 300;
 
+const HIDDEN_CATALOG_ITEM_IDS = new Set([
+  'black-jacket-01',
+  'green-pullover-01',
+  'grey-pullover-01',
+  'white-jacket-01',
+]);
+
+const REQUIRED_CATALOG_ITEM_IDS = new Set(['polka-tank-01', 'grey-sweater-01']);
+
 let sourcePhotoFile = null;
 let currentCatalog = [];
 let generatedPreviewImage = null;
@@ -524,14 +533,29 @@ async function loadCatalogFromApi() {
     const data = await response.json();
     if (!Array.isArray(data.items) || !data.items.length) throw new Error('Каталог пуст.');
     setStatusNotice('');
-    return data.items;
+    const items = data.items.filter((it) => !HIDDEN_CATALOG_ITEM_IDS.has(it?.id));
+    return ensureRequiredCatalogItems(items);
   } catch (err) {
     console.warn('Catalog API unavailable, fallback to mock catalog.', err);
     setStatusNotice('Каталог из API недоступен — показан демо‑каталог. Это не влияет на загрузку фото, но AI‑примерка может работать нестабильно.');
-    return getMockCatalog();
+    const items = getMockCatalog().filter((it) => !HIDDEN_CATALOG_ITEM_IDS.has(it?.id));
+    return ensureRequiredCatalogItems(items);
   } finally {
     window.clearTimeout(timeoutId);
   }
+}
+
+function ensureRequiredCatalogItems(items) {
+  const next = Array.isArray(items) ? [...items] : [];
+  const existingIds = new Set(next.map((it) => it?.id).filter(Boolean));
+  const mockById = new Map(getMockCatalog().map((it) => [it.id, it]));
+
+  for (const requiredId of REQUIRED_CATALOG_ITEM_IDS) {
+    if (existingIds.has(requiredId)) continue;
+    const fallback = mockById.get(requiredId);
+    if (fallback) next.push(fallback);
+  }
+  return next;
 }
 
 async function loadImageFromUrl(url) {
