@@ -1,4 +1,4 @@
-#!/Users/darastrelkova/graduation_project_erika_dasha/.venv/bin/python3.12
+#!/Users/darastrelkova/graduation/graduation_project_erika_dasha/.venv/bin/python
 
 import sys
 import json
