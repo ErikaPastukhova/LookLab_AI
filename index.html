@@ -3,18 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LookLab — Покажите товары так, как их увидит покупатель</title>
-  <link href="landing.css" rel="stylesheet" type="text/css">
+  <title>LOOKLAB AI — Покажите товары так, как их увидит покупатель</title>
+  <link href="landing.css?v=2" rel="stylesheet" type="text/css">
+  <link href="ui/messages.css" rel="stylesheet" type="text/css">
 </head>
 <body>
   <header class="landing-header">
-    <div class="landing-header-brand">LookLab</div>
+    <div class="landing-header-brand">LOOKLAB AI</div>
   </header>
 
   <!-- 1. Hero -->
   <section class="hero">
     <h1>Покажите свои товары так, как&nbsp;их увидит покупатель</h1>
-    <h2>LookLab предлагает два продукта для fashion e-commerce: онлайн‑манекен и&nbsp;ИИ‑примерочную.</h2>
+    <h2>LOOKLAB AI предлагает два продукта для fashion e-commerce: онлайн‑манекен и&nbsp;ИИ‑примерочную.</h2>
     <div class="hero-buttons">
       <a href="try.html" class="btn btn-primary">Попробовать</a>
       <a href="#request-form" class="btn btn-secondary">Оставить заявку</a>
@@ -94,19 +95,28 @@
 
   <!-- 5. Форма заявки -->
   <section id="request-form" class="section section-form">
-    <h2>Хотите подключить LookLab?</h2>
+    <h2>Хотите подключить LOOKLAB?</h2>
     <p class="section-subtitle">Оставьте заявку, и&nbsp;мы покажем, как&nbsp;онлайн‑манекен и&nbsp;ИИ‑примерочная будут работать именно в&nbsp;вашем магазине.</p>
     <form id="request-form-el" class="request-form">
+      <div id="request-loader" class="form-loader" hidden aria-live="polite" aria-busy="true">
+        <div class="form-loader-spinner" aria-hidden="true"></div>
+        <div class="form-loader-text">Отправляем заявку…</div>
+      </div>
+      <!-- honeypot: если заполнено, считаем это спамом -->
+      <div class="form-field" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;" aria-hidden="true">
+        <label class="form-label" for="request-website">Website</label>
+        <input id="request-website" type="text" name="website" tabindex="-1" autocomplete="off">
+      </div>
       <div class="form-field">
-        <label class="form-label" for="request-name">Имя</label>
+        <label class="form-label" for="request-name">Имя <span class="required-mark" aria-hidden="true">*</span></label>
         <input id="request-name" type="text" name="name" required>
       </div>
       <div class="form-field">
-        <label class="form-label" for="request-contact">Номер телефона для связи</label>
-        <input id="request-contact" type="tel" name="contact" inputmode="tel" autocomplete="tel-national" placeholder="+7 (999) 123-45-67" pattern="^\+7[\s]?\(?\d{3}\)?[\s]?\d{3}[-\s]?\d{2}[-\s]?\d{2}$" title="Введите российский номер в формате +7 (999) 123-45-67" required>
+        <label class="form-label" for="request-contact">Номер телефона для связи <span class="required-mark" aria-hidden="true">*</span></label>
+        <input id="request-contact" type="tel" name="contact" inputmode="tel" autocomplete="tel" placeholder="+7 (999) 123 45 67" pattern="^(\+\d{11,15}|8\d{10}|7\d{10})$" title="Введите номер: + и цифры (например, +76176175454) или 8 и цифры (например, 89661531212)" required>
       </div>
       <div class="form-field">
-        <label class="form-label" for="request-store">Название вашего интернет-магазина или ссылка на&nbsp;сайт</label>
+        <label class="form-label" for="request-store">Название вашего интернет-магазина или ссылка на&nbsp;сайт <span class="required-mark" aria-hidden="true">*</span></label>
         <input id="request-store" type="text" name="store" required>
       </div>
       <div class="form-field">
@@ -121,10 +131,15 @@
 
   <!-- 6. Футер -->
   <footer class="footer">
-    <p class="footer-brand">LookLab</p>
+    <p class="footer-brand">LOOKLAB AI</p>
     <a href="mailto:contact@online-mannequin.ru">contact@online-mannequin.ru</a>
-    <p class="footer-copy">© 2026 LookLab</p>
+    <p class="footer-copy">© 2026 LOOKLAB AI</p>
   </footer>
 
+  <script type="module">
+    import { installGlobalErrorHandlers } from './ui/messages.js';
+    installGlobalErrorHandlers();
+  </script>
+  <script type="module" src="./request-form.js"></script>
 </body>
 </html>

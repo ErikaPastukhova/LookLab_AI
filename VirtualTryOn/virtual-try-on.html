@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Виртуальная примерка</title>
   <link href="./virtualTryOn.css" rel="stylesheet" type="text/css" />
+  <link href="../ui/messages.css" rel="stylesheet" type="text/css" />
 </head>
 <body>
   <header class="vto-header">
@@ -29,7 +30,7 @@
           <div class="vto-upload-zone-inner">
             <div class="vto-upload-icon">📷</div>
             <div class="vto-upload-text">
-              Выберите или перетащите файл
+              Выберите файл
             </div>
           </div>
           <input id="vto-file-input" class="vto-file-input" type="file" accept="image/*" />
@@ -38,6 +39,8 @@
         <div id="vto-status-uploading" class="vto-status" hidden>
           Загрузка изображения...
         </div>
+
+        <div id="vto-status-notice" class="vto-status vto-status-notice" hidden></div>
 
         <div id="vto-status-error" class="vto-status vto-status-error" hidden></div>
       </div>
@@ -84,7 +87,7 @@
       <div class="vto-preview-card">
         <h2 class="vto-card-title">Примерка</h2>
         <p class="vto-help">
-          После выбора одежды нажмите кнопку ниже. Генерация выполняется на AI-сервисе и может занять до 20-40 секунд.
+          После выбора одежды нажмите кнопку ниже. Генерация выполняется на AI-сервисе и может занять до минуты.
         </p>
 
         <button id="vto-generate-btn" class="vto-generate-btn" type="button" disabled>
@@ -98,8 +101,26 @@
           </div>
         </div>
 
-        <div id="vto-status-rendering" class="vto-status" hidden>
-          Генерируем результат...
+        <div id="vto-status-rendering" class="vto-status vto-status-loading" hidden>
+          <span class="vto-spinner" aria-hidden="true"></span>
+          <span id="vto-status-rendering-text">Генерируем результат...</span>
+        </div>
+
+        <div id="vto-result-actions" class="vto-result-actions" hidden>
+          <button id="vto-save-btn" class="vto-action-btn" type="button">
+            Сохранить
+          </button>
+
+          <div class="vto-share">
+            <button id="vto-share-btn" class="vto-action-btn vto-action-btn--secondary" type="button" aria-haspopup="menu" aria-expanded="false">
+              Поделиться
+            </button>
+            <div id="vto-share-menu" class="vto-share-menu" role="menu" hidden>
+              <a id="vto-share-telegram" class="vto-share-link" role="menuitem" target="_blank" rel="noopener noreferrer">Telegram</a>
+              <a id="vto-share-whatsapp" class="vto-share-link" role="menuitem" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+              <a id="vto-share-vk" class="vto-share-link" role="menuitem" target="_blank" rel="noopener noreferrer">VK</a>
+            </div>
+          </div>
         </div>
       </div>
     </section>

@@ -13,6 +13,8 @@
   --vto-btn-radius: 999px;
   --vto-shadow: 0 12px 34px rgba(0,0,0,0.08);
   --vto-font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  --vto-catalog-gap: 10px;
+  --vto-catalog-card-h: 240px; /* desktop: ensures 2x2 visible */
 }
 
 html, body {
@@ -216,9 +218,143 @@ html, body {
   font-size: 13px;
 }
 
+.vto-status[hidden] {
+  display: none !important;
+}
+
+.vto-status-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.vto-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid rgba(194, 122, 210, 0.25);
+  border-top-color: rgba(194, 122, 210, 0.95);
+  animation: vto-spin 0.9s linear infinite;
+  flex: 0 0 auto;
+}
+
+@keyframes vto-spin {
+  to { transform: rotate(360deg); }
+}
+
+.vto-result-actions[hidden] {
+  display: none !important;
+}
+
+.vto-result-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.vto-action-btn {
+  flex: 1;
+  border-radius: var(--vto-btn-radius);
+  padding: 10px 14px;
+  font-weight: 900;
+  cursor: pointer;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--vto-color-text);
+}
+
+.vto-action-btn:hover {
+  border-color: rgba(194, 122, 210, 0.55);
+}
+
+.vto-action-btn--secondary {
+  background: rgba(238, 244, 221, 1);
+  border-color: rgba(216, 226, 200, 1);
+  color: rgba(17, 17, 17, 0.92);
+}
+
+.vto-share {
+  position: relative;
+  flex: 1;
+}
+
+.vto-share-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(216, 221, 208, 1);
+  border-radius: 16px;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.14);
+  backdrop-filter: blur(12px);
+  padding: 6px;
+  z-index: 30;
+}
+
+.vto-share-link {
+  display: block;
+  text-decoration: none;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-weight: 900;
+  color: var(--vto-color-text);
+}
+
+.vto-share-link:hover {
+  background: rgba(194, 122, 210, 0.1);
+}
+
 .vto-status-error {
   background: rgba(220, 38, 38, 0.07);
   color: #b91c1c;
+}
+
+.vto-status-notice {
+  background: rgba(37, 99, 235, 0.06);
+  color: #1d4ed8;
+}
+
+.vto-status-title {
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+
+.vto-status-help {
+  font-weight: 700;
+  color: inherit;
+  opacity: 0.92;
+  line-height: 1.35;
+}
+
+.vto-status-help ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.vto-status-help li {
+  margin: 2px 0;
+}
+
+.vto-status-details {
+  margin-top: 8px;
+  opacity: 0.9;
+}
+
+.vto-status-details summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.vto-status-details pre {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.06);
+  color: rgba(15, 23, 42, 0.85);
+  overflow: auto;
+  font-weight: 700;
+  font-size: 12px;
 }
 
 .vto-catalog-controls {
@@ -333,16 +469,37 @@ html, body {
 .vto-catalog-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: var(--vto-catalog-gap);
+  /* Keep the catalog viewport fixed to 2 rows (2x2 visible) */
+  grid-auto-rows: var(--vto-catalog-card-h);
+  height: calc(var(--vto-catalog-card-h) * 2 + var(--vto-catalog-gap));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 6px;
 }
 
 @media (max-width: 900px) {
   .vto-catalog-grid {
     grid-template-columns: 1fr 1fr;
-    max-height: 520px;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-right: 6px;
+    /* On smaller screens cards are usually a bit shorter */
+    height: calc(210px * 2 + var(--vto-catalog-gap));
+  }
+}
+
+.vto-item-card {
+  height: var(--vto-catalog-card-h);
+  display: flex;
+  flex-direction: column;
+}
+
+.vto-item-image-wrap {
+  flex: 1;
+  /* keep existing aspect-ratio behavior as fallback */
+}
+
+@media (max-width: 520px) {
+  .vto-catalog-grid {
+    height: calc(190px * 2 + var(--vto-catalog-gap));
   }
 }
 

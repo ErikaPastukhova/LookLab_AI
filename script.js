@@ -2,6 +2,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { installGlobalErrorHandlers, showError, showNotice, showSuccess, normalizeNetworkError } from './ui/messages.js';
+
+installGlobalErrorHandlers();
 
 // --- СЦЕНА ---
 const scene = new THREE.Scene();
@@ -172,7 +175,17 @@ function loadModel(gender) {
         if (humanMesh) updateAll();
         frameModelFront();
 
-    }, undefined, function(e) { console.error(e); });
+    }, undefined, function(e) {
+        showError({
+            title: 'Не удалось загрузить 3D‑модель.',
+            help: [
+                'Проверьте подключение к интернету (модель может загружаться как файл).',
+                'Если вы открыли страницу через file:// — запустите через локальный сервер.',
+                'Попробуйте обновить страницу.',
+            ],
+            technical: e && e.message ? e.message : String(e || ''),
+        });
+    });
 }
 
 loadModel('female');
@@ -756,16 +769,9 @@ document.addEventListener('keydown', (e) => {
         closeMenu();
     })();
 
-    // Toast уведомления
-    const toast = document.createElement('div');
-    toast.id = 'toast-notification';
-    if(document.querySelector('.modal-content')) document.querySelector('.modal-content').appendChild(toast);
-
-    function showToast(message, type = 'success') {
-        const icon = type === 'success' ? '✅' : '⚠️';
-        toast.innerHTML = `<span>$${icon}</span> $${message}`;
-        toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 2500);
+    function measureToast(message, type = 'success') {
+        const kind = type === 'success' ? 'success' : 'error';
+        showToast(message, kind, 2600);
     }
 
     let img = new Image();
@@ -836,7 +842,19 @@ document.addEventListener('keydown', (e) => {
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         try {
             imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        } catch(e) { console.warn("CORS"); }
+        } catch (e) {
+            imgData = null;
+            showNotice({
+                title: 'Браузер заблокировал анализ изображения.',
+                help: [
+                    'Откройте сайт через локальный сервер (не file://).',
+                    'Если фото “вставлено” из внешнего источника — сохраните его как файл и загрузите заново.',
+                    'Попробуйте другой браузер.',
+                ],
+                technical: e && e.message ? e.message : String(e || ''),
+                autoHideMs: 0,
+            });
+        }
 
         updateUI();
     }
@@ -994,7 +1012,7 @@ document.addEventListener('keydown', (e) => {
     function nextStep() {
         currentStepIndex++;
         if (currentStepIndex >= activeQueue.length) {
-            alert("Готово! Данные перенесены.");
+            showSuccess({ title: 'Готово! Данные перенесены.' });
             document.getElementById('measure-modal').style.display = 'none';
             return;
         }
@@ -1023,7 +1041,10 @@ document.addEventListener('keydown', (e) => {
 
     // --- УМНЫЙ АВТО-ПОИСК (С ИГНОРОМ ЛИСТА A4) ---
     btnAuto.onclick = () => {
-        if (!imgData) return showToast("Нет картинки", "error");
+        if (!imgData) {
+            measureToast('Нет данных изображения. Перезагрузите фото и попробуйте снова.', 'error');
+            return;
+        }
 
         const btnText = btnAuto.innerText;
         btnAuto.innerText = "Ищу...";
@@ -1032,7 +1053,16 @@ document.addEventListener('keydown', (e) => {
         setTimeout(() => {
             try {
                 runAutoDetect();
-            } catch(e) { console.error(e); }
+            } catch (e) {
+                showError({
+                    title: 'Не удалось выполнить авто‑поиск.',
+                    help: [
+                        'Попробуйте отметить точки вручную.',
+                        'Если объект сливается с фоном — выберите другое фото с контрастным фоном.',
+                    ],
+                    technical: e && e.message ? e.message : String(e || ''),
+                });
+            }
             finally {
                 btnAuto.innerText = btnText;
                 btnAuto.classList.remove("spinning");
@@ -1157,12 +1187,12 @@ document.addEventListener('keydown', (e) => {
 
             checkResult();
             const cm = Math.round((maxLen / scaleFactor) * 2);
-            showToast(`Найдено! Обхват ~$${cm} см`, "success");
+            measureToast(`Найдено! Обхват ~${cm} см`, "success");
         } else {
             // Если ничего похожего на одежду не нашли
             clicks = [{x: w*0.4, y: scanY}, {x: w*0.6, y: scanY}];
             draw(); checkResult();
-            showToast("Объект сливается с фоном", "error");
+            measureToast("Объект сливается с фоном. Попробуйте фото с более контрастным фоном.", "error");
         }
     }
 
@@ -1226,7 +1256,15 @@ document.addEventListener('keydown', (e) => {
             });
             return poseLandmarker;
         } catch (err) {
-            console.error("MediaPipe Pose load error:", err);
+            const n = normalizeNetworkError(err);
+            showError({
+                title: 'Не удалось загрузить модуль распознавания позы (MediaPipe).',
+                help: [
+                    ...n.help,
+                    'Если у вас блокировщик (AdBlock) — попробуйте отключить его для этой страницы.',
+                ],
+                technical: n.technical,
+            });
             return null;
         }
     }
@@ -1543,7 +1581,15 @@ document.addEventListener('keydown', (e) => {
             }
             applyBodyMeasurementsFromPose(lastLandmarks, lastLandmarksSide);
         } catch (err) {
-            console.error("Body scan error:", err);
+            showError({
+                title: 'Ошибка анализа тела.',
+                help: [
+                    'Проверьте, что фото в полный рост и человек хорошо виден.',
+                    'Попробуйте другое фото (ровный фон, без сильных теней).',
+                    'Если ошибка повторяется — обновите страницу.',
+                ],
+                technical: err && err.message ? err.message : String(err || ''),
+            });
             if (document.getElementById('body-scan-instruction')) {
                 document.getElementById('body-scan-instruction').innerText = '📌 Загрузите фото и нажмите кнопку';
             }

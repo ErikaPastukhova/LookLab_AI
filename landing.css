@@ -49,6 +49,52 @@ body {
   line-height: 1.45;
 }
 
+.required-mark {
+  color: #b91c1c;
+  font-weight: 900;
+}
+
+.request-form {
+  position: relative;
+}
+
+.form-loader {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(8px);
+  z-index: 10;
+}
+
+.form-loader[hidden] {
+  display: none !important;
+}
+
+.form-loader-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 3px solid rgba(17, 17, 17, 0.18);
+  border-top-color: rgba(204, 134, 216, 1);
+  animation: form-spin 0.9s linear infinite;
+}
+
+.form-loader-text {
+  font-weight: 800;
+  color: var(--lp-text-muted);
+  font-size: 14px;
+}
+
+@keyframes form-spin {
+  to { transform: rotate(360deg); }
+}
+
 .landing-header {
   width: 100%;
   display: flex;
@@ -412,6 +458,10 @@ h3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.section-soon .cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .card,
 .step {
   border-radius: var(--lp-radius-md);
@@ -461,6 +511,25 @@ h3 {
 .section-how .steps .step {
   grid-column: auto;
   min-height: 230px;
+}
+
+.section-soon .cards .card {
+  grid-column: auto;
+  height: 230px;
+  display: flex;
+  flex-direction: column;
+}
+
+.section-soon .cards .card:nth-child(1),
+.section-soon .cards .card:nth-child(2),
+.section-soon .cards .card:nth-child(3) {
+  grid-column: auto;
+  justify-self: stretch;
+  width: 100%;
+}
+
+.section-soon .cards .card p {
+  margin-top: auto;
 }
 
 .card-icon,
