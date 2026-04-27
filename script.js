@@ -458,7 +458,7 @@ document.querySelectorAll('.accordion-toggle').forEach(toggle => {
 
 // --- MOBILE: bottom-sheet with tabs (demo.html) ---
 function initMobileBottomSheet() {
-    const mq = window.matchMedia && window.matchMedia('(max-width: 768px)');
+    const mq = window.matchMedia && window.matchMedia('(max-width: 1024px)');
     if (!mq || !mq.matches) return false;
 
     const sheet = document.getElementById('mobile-sheet');
@@ -613,7 +613,7 @@ function initMobileBottomSheet() {
 
     // Keep sheet usable after orientation changes, etc.
     window.addEventListener('resize', () => {
-        if (window.innerWidth > 768) return;
+        if (window.innerWidth > 1024) return;
         sheet.hidden = false;
     });
 
@@ -621,7 +621,7 @@ function initMobileBottomSheet() {
 }
 
 function setupMobileBottomSheetAutoInit() {
-    const mq = window.matchMedia && window.matchMedia('(max-width: 768px)');
+    const mq = window.matchMedia && window.matchMedia('(max-width: 1024px)');
     if (!mq) return;
 
     let timer = null;

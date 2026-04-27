@@ -1141,8 +1141,15 @@ input[name="gender-select"]:checked + span {
   to { transform: rotate(360deg); }
 }
 
+/* demo.html: hide mobile header on wide viewports (no mobile rules apply there) */
+@media (min-width: 1025px) {
+  .mobile-topbar {
+    display: none;
+  }
+}
+
 /* --- МОБИЛЬНАЯ АДАПТАЦИЯ --- */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   :root {
     --mobile-sheet-peek: 124px;
   }
