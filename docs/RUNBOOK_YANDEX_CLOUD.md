@@ -298,13 +298,22 @@ ssh ubuntu@111.88.254.136 'sudo systemctl restart om-backend'
 
 ### 6.5 Обновить фронтенд (статический сайт)
 
-Фронт лежит в бакете `onlinemannequin` (в корне + `VirtualTryOn/*`).  
-Обычно это означает перезалить измененные файлы (например `index.html`, `landing.css`, `VirtualTryOn/virtualTryOn.js`, etc.) тем же `put-object`.
+Фронт лежит в бакете `onlinemannequin` (в корне + `VirtualTryOn/*` + `ui/*`).
 
-Пример для одного файла:
+**Рекомендуемый способ:** скрипт из репозитория проекта (после актуального checkout подмодуля / клона):
 
 ```bash
-yc storage s3api put-object --bucket onlinemannequin --key index.html --body ./index.html
+# из корня монорепозитория, если `graduation_project_erika_dasha` — подмодуль:
+git submodule update --init --recursive
+bash graduation_project_erika_dasha/scripts/deploy_bucket_static.sh
+```
+
+Скрипт: [scripts/deploy_bucket_static.sh](../scripts/deploy_bucket_static.sh) — заливает полный набор статики (включая `request-form.js`), выставляет **`Content-Type`** (`text/html`, `text/css`, `application/javascript` с `charset=utf-8`), чтобы браузер не предлагал «сохранить страницу» вместо отображения. Ключи в бакете с префиксом **`catalog/`** (корневой каталог одежды) скрипт **не трогает**; путь `VirtualTryOn/catalog/categories.js` разрешён.
+
+Ручная заливка одного файла (при необходимости задайте `--content-type`):
+
+```bash
+yc storage s3api put-object --bucket onlinemannequin --key index.html --body ./index.html --content-type "text/html; charset=utf-8"
 ```
 
 ### 6.6 GPU VM старт/стоп (ручной контроль)
