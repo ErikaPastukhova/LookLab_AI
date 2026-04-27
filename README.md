@@ -4,6 +4,16 @@
 - статический frontend (`index.html`, `demo.html`, `VirtualTryOn/*`);
 - backend на FastAPI для AI-примерки (`backend/*`).
 
+## Сбор заявок (форма на лендинге) → Google Sheets
+
+На лендинге в `index.html` есть форма «Оставить заявку». Для сохранения заявок в Google Sheets используйте Google Apps Script Web App.
+
+Инструкция и готовый шаблон скрипта:
+- `google-apps-script/leads/SETUP.md`
+- `google-apps-script/leads/Code.gs`
+
+После деплоя Apps Script вставьте URL Web App в `request-form.js` (переменная `APPS_SCRIPT_URL`).
+
 ## Быстрый запуск
 
 ### 1) Backend

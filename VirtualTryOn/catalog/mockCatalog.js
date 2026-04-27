@@ -34,15 +34,6 @@ export function getMockCatalog() {
   /** Placement (x/y/w/h) в долях от canvas. */
   return [
     {
-      id: 'black-jacket-01',
-      name: 'Черная куртка',
-      category: 'outerwear',
-      categoryLabel: 'Куртка',
-      color: '#111827',
-      garmentImageUrl: 'https://storage.yandexcloud.net/onlinemannequin/%D0%9A%D0%B0%D1%82%D0%B0%D0%BB%D0%BE%D0%B3%20%D0%B2%D0%B5%D1%89%D0%B5%D0%B9/black_jacket.jpg',
-      overlayPlacement: { x: 0.25, y: 0.15, w: 0.5, h: 0.48 },
-    },
-    {
       id: 'black-top-01',
       name: 'Черный топ',
       category: 'top',
@@ -52,31 +43,22 @@ export function getMockCatalog() {
       overlayPlacement: { x: 0.27, y: 0.2, w: 0.46, h: 0.38 },
     },
     {
-      id: 'green-pullover-01',
-      name: 'Зеленый пуловер',
+      id: 'polka-tank-01',
+      name: 'Топ в горошек',
       category: 'top',
-      categoryLabel: 'Пуловер',
-      color: '#166534',
-      garmentImageUrl: 'https://storage.yandexcloud.net/onlinemannequin/%D0%9A%D0%B0%D1%82%D0%B0%D0%BB%D0%BE%D0%B3%20%D0%B2%D0%B5%D1%89%D0%B5%D0%B9/green_pullover.jpg',
-      overlayPlacement: { x: 0.28, y: 0.22, w: 0.44, h: 0.36 },
+      categoryLabel: 'Топ',
+      color: '#111827',
+      garmentImageUrl: 'https://storage.yandexcloud.net/onlinemannequin/%D0%9A%D0%B0%D1%82%D0%B0%D0%BB%D0%BE%D0%B3%20%D0%B2%D0%B5%D1%89%D0%B5%D0%B9/Polka_Tank.jpg',
+      overlayPlacement: { x: 0.27, y: 0.2, w: 0.46, h: 0.38 },
     },
     {
-      id: 'grey-pullover-01',
-      name: 'Серый пуловер',
+      id: 'grey-sweater-01',
+      name: 'Серый свитер',
       category: 'top',
-      categoryLabel: 'Пуловер',
+      categoryLabel: 'Свитер',
       color: '#6b7280',
-      garmentImageUrl: 'https://storage.yandexcloud.net/onlinemannequin/%D0%9A%D0%B0%D1%82%D0%B0%D0%BB%D0%BE%D0%B3%20%D0%B2%D0%B5%D1%89%D0%B5%D0%B9/grey_pullover.jpg',
-      overlayPlacement: { x: 0.28, y: 0.22, w: 0.44, h: 0.36 },
-    },
-    {
-      id: 'white-jacket-01',
-      name: 'Белая куртка',
-      category: 'outerwear',
-      categoryLabel: 'Куртка',
-      color: '#e5e7eb',
-      garmentImageUrl: 'https://storage.yandexcloud.net/onlinemannequin/%D0%9A%D0%B0%D1%82%D0%B0%D0%BB%D0%BE%D0%B3%20%D0%B2%D0%B5%D1%89%D0%B5%D0%B9/white_jacket.jpg',
-      overlayPlacement: { x: 0.25, y: 0.15, w: 0.5, h: 0.48 },
+      garmentImageUrl: 'https://storage.yandexcloud.net/onlinemannequin/%D0%9A%D0%B0%D1%82%D0%B0%D0%BB%D0%BE%D0%B3%20%D0%B2%D0%B5%D1%89%D0%B5%D0%B9/grey_sweater.jpg',
+      overlayPlacement: { x: 0.24, y: 0.17, w: 0.52, h: 0.46 },
     },
   ];
 }
