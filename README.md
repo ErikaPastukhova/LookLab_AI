@@ -4,6 +4,16 @@
 - статический frontend (`index.html`, `demo.html`, `VirtualTryOn/*`);
 - backend на FastAPI для AI-примерки (`backend/*`).
 
+## Деплой статики в Yandex Object Storage
+
+Из корня этого репозитория (после `git submodule update --init --recursive`, если вы клонировали проект как подмодуль в монорепозитории):
+
+```bash
+bash scripts/deploy_bucket_static.sh
+```
+
+Скрипт залижает нужные HTML/CSS/JS в бакет `onlinemannequin` с корректными `Content-Type` и не трогает корневой префикс `catalog/` в бакете. Полный операционный контекст — [docs/RUNBOOK_YANDEX_CLOUD.md](docs/RUNBOOK_YANDEX_CLOUD.md) (раздел 6.5).
+
 ## Сбор заявок (форма на лендинге) → Google Sheets
 
 На лендинге в `index.html` есть форма «Оставить заявку». Для сохранения заявок в Google Sheets используйте Google Apps Script Web App.
