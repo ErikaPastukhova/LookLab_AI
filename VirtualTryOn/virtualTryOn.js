@@ -1,7 +1,6 @@
 import { createTryOnState } from './state/tryOnState.js';
-import { getMockCatalog, getAllCategories } from './catalog/mockCatalog.js';
-import { applyClothingToPhoto } from './renderer/applyClothingToPhoto.js';
-import { installGlobalErrorHandlers } from '../ui/messages.js';
+import { getAllCategories } from './catalog/categories.js';
+import { installGlobalErrorHandlers, showError } from '../ui/messages.js';
 
 installGlobalErrorHandlers();
 
@@ -18,6 +17,7 @@ const elements = {
   categoryValue: document.getElementById('vto-category-value'),
   categoryMenu: document.getElementById('vto-category-menu'),
   catalog: document.getElementById('vto-catalog'),
+  catalogPagination: document.getElementById('vto-catalog-pagination'),
   catalogHint: document.getElementById('vto-catalog-hint'),
 
   canvas: document.getElementById('vto-canvas'),
@@ -33,6 +33,13 @@ const elements = {
   shareTelegram: document.getElementById('vto-share-telegram'),
   shareWhatsapp: document.getElementById('vto-share-whatsapp'),
   shareVk: document.getElementById('vto-share-vk'),
+
+  canvasWrap: document.querySelector('.vto-canvas-wrap'),
+
+  genderSelect: document.getElementById('vto-gender-select'),
+  genderTrigger: document.getElementById('vto-gender-trigger'),
+  genderValue: document.getElementById('vto-gender-value'),
+  genderMenu: document.getElementById('vto-gender-menu'),
 };
 
 const canvasSize = {
@@ -40,9 +47,18 @@ const canvasSize = {
   height: 0,
 };
 
-const API_BASE =
-  window.VTO_API_BASE ||
-  'https://d5dnmn8hm7jc5rsrfis2.nkhmighe.apigw.yandexcloud.net/api/v1';
+function getDefaultApiBase() {
+  const explicit = window.VTO_API_BASE;
+  if (explicit) return explicit;
+
+  const host = String(window.location.hostname || '').toLowerCase();
+  const isLocal = host === 'localhost' || host === '127.0.0.1';
+  if (isLocal) return 'http://localhost:8000/api/v1';
+
+  return 'https://d5dnmn8hm7jc5rsrfis2.nkhmighe.apigw.yandexcloud.net/api/v1';
+}
+
+const API_BASE = getDefaultApiBase();
 
 const CATALOG_REQUEST_TIMEOUT_MS = 8000;
 
@@ -56,11 +72,16 @@ const HIDDEN_CATALOG_ITEM_IDS = new Set([
   'white-jacket-01',
 ]);
 
-const REQUIRED_CATALOG_ITEM_IDS = new Set(['polka-tank-01', 'grey-sweater-01']);
-
 let sourcePhotoFile = null;
 let currentCatalog = [];
 let generatedPreviewImage = null;
+let lastResultImageUrl = null;
+let hasFinalResult = false;
+
+const MOBILE_PAGER_QUERY = '(max-width: 900px)';
+const PAGE_SIZE_MOBILE = 4;
+const mobilePagerMql = window.matchMedia?.(MOBILE_PAGER_QUERY) || null;
+let catalogPage = 1;
 
 let generationTickerId = null;
 let generationPhase = 'queued'; // queued | running
@@ -111,6 +132,14 @@ function setUserFacingError({ title, help = [], technical = '' }) {
     elements.statusError.hidden = true;
     elements.statusError.textContent = '';
     return;
+  }
+
+  // Also show the error in a global, fixed message area (like other screens),
+  // because the inline error block can be hidden when the preview overlay is not visible.
+  try {
+    showError({ title, help, technical });
+  } catch {
+    // ignore UI message failures
   }
 
   const helpItems = Array.isArray(help) ? help.filter(Boolean) : [];
@@ -219,6 +248,8 @@ function setRendering(isRendering, text = 'Генерируем результа
   } else {
     elements.statusRendering.textContent = text;
   }
+
+  updateActionsSlotVisibility();
 }
 
 function getGenerationMessage(elapsedMs) {
@@ -276,15 +307,49 @@ function updateGenerateButtonState() {
   const { status } = state.snapshot();
   const isBusy = status === 'uploading' || status === 'generating';
   elements.generateButton.disabled = !hasPhoto || !hasSelectedItem || isBusy;
+
+  updateActionsSlotVisibility();
 }
 
 function updateResultActionsVisibility() {
   if (!elements.resultActions) return;
-  // Show actions only when we have a final rendered result (AI or fallback).
-  const hasAnyResult = !!generatedPreviewImage || (!!state.getPhoto() && !!state.getSelectedItem());
   const { status } = state.snapshot();
   const isBusy = status === 'uploading' || status === 'generating';
-  elements.resultActions.hidden = !hasAnyResult || isBusy;
+  // Show actions only after generation finished (AI or fallback).
+  elements.resultActions.hidden = !hasFinalResult || isBusy;
+  if (elements.resultActions.hidden) closeShareMenu();
+
+  updateActionsSlotVisibility();
+}
+
+function updateActionsSlotVisibility() {
+  if (!elements.generateButton || !elements.statusRendering || !elements.resultActions) return;
+
+  const { status } = state.snapshot();
+  const isGenerating = status === 'generating';
+
+  // During generation: show status instead of generate button.
+  // After generation finished: show result actions instead of generate button.
+  // Otherwise: show generate button.
+  if (isGenerating) {
+    elements.generateButton.hidden = true;
+    elements.resultActions.hidden = true;
+    // statusRendering visibility is controlled by setRendering(true/false)
+    return;
+  }
+
+  const shouldShowResultActions = hasFinalResult;
+  elements.statusRendering.hidden = true;
+  elements.statusRendering.style.display = 'none';
+
+  if (shouldShowResultActions) {
+    elements.generateButton.hidden = true;
+    elements.resultActions.hidden = false;
+  } else {
+    elements.generateButton.hidden = false;
+    // keep resultActions hidden until we have final result
+    elements.resultActions.hidden = true;
+  }
 }
 
 function drawImageContain(ctx, w, h, img) {
@@ -349,7 +414,8 @@ function prepareCanvasForRender() {
 
 function ensureCategories() {
   if (!elements.categorySelect) return;
-  const categories = getAllCategories();
+  // Initial fill with the full list; later we will narrow it down depending on gender filter.
+  const categories = getAllCategories(elements.genderSelect?.value || 'all');
   for (const cat of categories) {
     const option = document.createElement('option');
     option.value = cat.value;
@@ -358,35 +424,35 @@ function ensureCategories() {
   }
 }
 
-function setupCategoryDropdown() {
-  if (!elements.categorySelect || !elements.categoryTrigger || !elements.categoryMenu || !elements.categoryValue) return;
+function setupSelectDropdown({ selectEl, triggerEl, menuEl, valueEl }) {
+  if (!selectEl || !triggerEl || !menuEl || !valueEl) return;
 
   function syncTriggerFromSelect() {
-    const selected = elements.categorySelect.selectedOptions?.[0];
-    elements.categoryValue.textContent = selected?.textContent || 'Все';
+    const selected = selectEl.selectedOptions?.[0];
+    valueEl.textContent = selected?.textContent || '';
   }
 
   function closeMenu() {
-    elements.categoryMenu.hidden = true;
-    elements.categoryTrigger.setAttribute('aria-expanded', 'false');
+    menuEl.hidden = true;
+    triggerEl.setAttribute('aria-expanded', 'false');
   }
 
   function openMenu() {
-    elements.categoryMenu.hidden = false;
-    elements.categoryTrigger.setAttribute('aria-expanded', 'true');
+    menuEl.hidden = false;
+    triggerEl.setAttribute('aria-expanded', 'true');
   }
 
   function toggleMenu() {
-    const isOpen = !elements.categoryMenu.hidden;
+    const isOpen = !menuEl.hidden;
     if (isOpen) closeMenu();
     else openMenu();
   }
 
   function rebuildMenuFromSelect() {
-    elements.categoryMenu.innerHTML = '';
-    const currentValue = elements.categorySelect.value;
+    menuEl.innerHTML = '';
+    const currentValue = selectEl.value;
 
-    for (const opt of elements.categorySelect.options) {
+    for (const opt of selectEl.options) {
       const el = document.createElement('div');
       el.className = 'vto-select-option';
       el.setAttribute('role', 'option');
@@ -394,22 +460,22 @@ function setupCategoryDropdown() {
       el.textContent = opt.textContent || opt.value;
       el.setAttribute('aria-selected', opt.value === currentValue ? 'true' : 'false');
       el.addEventListener('click', () => {
-        elements.categorySelect.value = opt.value;
-        elements.categorySelect.dispatchEvent(new Event('change', { bubbles: true }));
+        selectEl.value = opt.value;
+        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
         syncTriggerFromSelect();
         rebuildMenuFromSelect();
         closeMenu();
       });
-      elements.categoryMenu.appendChild(el);
+      menuEl.appendChild(el);
     }
   }
 
-  elements.categoryTrigger.addEventListener('click', toggleMenu);
+  triggerEl.addEventListener('click', toggleMenu);
 
   document.addEventListener('click', (e) => {
     const t = e.target;
     if (!(t instanceof Node)) return;
-    if (elements.categoryMenu.contains(t) || elements.categoryTrigger.contains(t)) return;
+    if (menuEl.contains(t) || triggerEl.contains(t)) return;
     closeMenu();
   });
 
@@ -417,7 +483,7 @@ function setupCategoryDropdown() {
     if (e.key === 'Escape') closeMenu();
   });
 
-  elements.categorySelect.addEventListener('change', () => {
+  selectEl.addEventListener('change', () => {
     syncTriggerFromSelect();
     rebuildMenuFromSelect();
   });
@@ -425,6 +491,77 @@ function setupCategoryDropdown() {
   syncTriggerFromSelect();
   rebuildMenuFromSelect();
   closeMenu();
+}
+
+function setupCategoryDropdown() {
+  setupSelectDropdown({
+    selectEl: elements.categorySelect,
+    triggerEl: elements.categoryTrigger,
+    menuEl: elements.categoryMenu,
+    valueEl: elements.categoryValue,
+  });
+}
+
+function setupGenderDropdown() {
+  setupSelectDropdown({
+    selectEl: elements.genderSelect,
+    triggerEl: elements.genderTrigger,
+    menuEl: elements.genderMenu,
+    valueEl: elements.genderValue,
+  });
+}
+
+function isMobileCatalogPagerEnabled() {
+  return !!mobilePagerMql?.matches;
+}
+
+function clampPage(value, totalPages) {
+  const nextTotal = Math.max(1, Number(totalPages) || 1);
+  const v = Number(value) || 1;
+  return Math.min(Math.max(1, v), nextTotal);
+}
+
+function setCatalogPaginationHidden(isHidden) {
+  if (!elements.catalogPagination) return;
+  elements.catalogPagination.hidden = !!isHidden;
+}
+
+function renderCatalogPagination(totalPages, currentPage, { onSelectPage } = {}) {
+  if (!elements.catalogPagination) return;
+
+  const pages = Math.max(1, Number(totalPages) || 1);
+  const page = clampPage(currentPage, pages);
+
+  // Hide pager for 0/1 pages (also for desktop).
+  if (!isMobileCatalogPagerEnabled() || pages <= 1) {
+    elements.catalogPagination.innerHTML = '';
+    setCatalogPaginationHidden(true);
+    return;
+  }
+
+  setCatalogPaginationHidden(false);
+  elements.catalogPagination.innerHTML = '';
+
+  for (let p = 1; p <= pages; p += 1) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'vto-page-btn';
+    btn.textContent = String(p);
+    btn.dataset.page = String(p);
+    btn.setAttribute('aria-label', `Страница ${p}`);
+
+    const isActive = p === page;
+    if (isActive) {
+      btn.classList.add('is-active');
+      btn.setAttribute('aria-current', 'page');
+    }
+
+    btn.addEventListener('click', () => {
+      if (typeof onSelectPage === 'function') onSelectPage(p);
+    });
+
+    elements.catalogPagination.appendChild(btn);
+  }
 }
 
 function renderCatalog(items) {
@@ -461,6 +598,7 @@ function renderCatalog(items) {
 
     card.addEventListener('click', () => {
       generatedPreviewImage = null;
+      hasFinalResult = false;
       state.setSelectedItem(item);
       // Update selection styling.
       for (const other of elements.catalog.querySelectorAll('.vto-item-card')) {
@@ -478,14 +616,104 @@ function filterCatalogByCategory(items, categoryValue) {
   return items.filter((it) => it.category === categoryValue);
 }
 
+function normalizeGender(value) {
+  const v = String(value || '').trim().toLowerCase();
+  if (v === 'male') return 'male';
+  if (v === 'female') return 'female';
+  if (v === 'unisex') return 'unisex';
+  return '';
+}
+
+function filterCatalogByGender(items, genderValue) {
+  if (genderValue === 'all') return items;
+  const g = normalizeGender(genderValue);
+  if (!g) return items;
+
+  return items.filter((it) => {
+    // Missing/unknown gender is treated as unisex by requirement.
+    const itemGender = normalizeGender(it?.gender) || 'unisex';
+    if (itemGender === 'unisex') return true;
+    return itemGender === g;
+  });
+}
+
+function rebuildCategoryOptionsForGender(items) {
+  if (!elements.categorySelect) return;
+
+  const availableItems = filterCatalogByGender(items, elements.genderSelect?.value || 'all');
+  const availableCategoryValues = new Set(
+    availableItems.map((it) => String(it?.category || '').trim()).filter(Boolean),
+  );
+
+  const allCategories = getAllCategories(elements.genderSelect?.value || 'all');
+  const nextOptions = [
+    { value: 'all', label: 'Все' },
+    ...allCategories
+      .filter((c) => availableCategoryValues.has(c.value))
+      .map((c) => ({ value: c.value, label: c.label })),
+  ];
+
+  const prevValue = elements.categorySelect.value || 'all';
+  const prevIsStillAvailable = nextOptions.some((o) => o.value === prevValue);
+
+  elements.categorySelect.innerHTML = '';
+  for (const opt of nextOptions) {
+    const el = document.createElement('option');
+    el.value = opt.value;
+    el.textContent = opt.label;
+    elements.categorySelect.appendChild(el);
+  }
+
+  elements.categorySelect.value = prevIsStillAvailable ? prevValue : 'all';
+  // Trigger re-sync of custom dropdown UI.
+  elements.categorySelect.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function getFilteredCatalog(items) {
+  const byCategory = filterCatalogByCategory(items, elements.categorySelect?.value || 'all');
+  return filterCatalogByGender(byCategory, elements.genderSelect?.value || 'all');
+}
+
+function renderCatalogWithMobilePagination(items, { resetPage = false } = {}) {
+  const filtered = getFilteredCatalog(items);
+
+  if (!isMobileCatalogPagerEnabled()) {
+    renderCatalog(filtered);
+    renderCatalogPagination(1, 1);
+    return;
+  }
+
+  if (resetPage) catalogPage = 1;
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE_MOBILE));
+  catalogPage = clampPage(catalogPage, totalPages);
+
+  const start = (catalogPage - 1) * PAGE_SIZE_MOBILE;
+  const pageItems = filtered.slice(start, start + PAGE_SIZE_MOBILE);
+
+  renderCatalog(pageItems);
+  renderCatalogPagination(totalPages, catalogPage, {
+    onSelectPage: (p) => {
+      catalogPage = clampPage(p, totalPages);
+      renderCatalogWithMobilePagination(items, { resetPage: false });
+    },
+  });
+}
+
 function initCatalog(items) {
   currentCatalog = items;
   // Скрываем подсказку, пока нет фото или пока не выбран предмет.
   if (elements.catalogHint) elements.catalogHint.hidden = true;
-  renderCatalog(filterCatalogByCategory(items, elements.categorySelect?.value || 'all'));
+  rebuildCategoryOptionsForGender(items);
+  renderCatalogWithMobilePagination(items, { resetPage: true });
 
   elements.categorySelect?.addEventListener('change', () => {
-    renderCatalog(filterCatalogByCategory(items, elements.categorySelect.value));
+    renderCatalogWithMobilePagination(items, { resetPage: true });
+  });
+
+  elements.genderSelect?.addEventListener('change', () => {
+    rebuildCategoryOptionsForGender(items);
+    renderCatalogWithMobilePagination(items, { resetPage: true });
   });
 }
 
@@ -534,33 +762,24 @@ async function loadCatalogFromApi() {
     if (!Array.isArray(data.items) || !data.items.length) throw new Error('Каталог пуст.');
     setStatusNotice('');
     const items = data.items.filter((it) => !HIDDEN_CATALOG_ITEM_IDS.has(it?.id));
-    return ensureRequiredCatalogItems(items);
+    return items;
   } catch (err) {
-    console.warn('Catalog API unavailable, fallback to mock catalog.', err);
-    setStatusNotice('Каталог из API недоступен — показан демо‑каталог. Это не влияет на загрузку фото, но AI‑примерка может работать нестабильно.');
-    const items = getMockCatalog().filter((it) => !HIDDEN_CATALOG_ITEM_IDS.has(it?.id));
-    return ensureRequiredCatalogItems(items);
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('Catalog API unavailable.', err);
+    setStatusNotice(
+      `Каталог недоступен (${message}). Проверьте, что запущен backend и указан правильный API_BASE.`,
+    );
+    return [];
   } finally {
     window.clearTimeout(timeoutId);
   }
 }
 
-function ensureRequiredCatalogItems(items) {
-  const next = Array.isArray(items) ? [...items] : [];
-  const existingIds = new Set(next.map((it) => it?.id).filter(Boolean));
-  const mockById = new Map(getMockCatalog().map((it) => [it.id, it]));
-
-  for (const requiredId of REQUIRED_CATALOG_ITEM_IDS) {
-    if (existingIds.has(requiredId)) continue;
-    const fallback = mockById.get(requiredId);
-    if (fallback) next.push(fallback);
-  }
-  return next;
-}
-
 async function loadImageFromUrl(url) {
   const img = new Image();
   img.decoding = 'async';
+  // Allow drawing to canvas and exporting when the image host sends CORS headers.
+  img.crossOrigin = 'anonymous';
   img.src = url;
   await new Promise((resolve, reject) => {
     img.onload = () => resolve();
@@ -583,6 +802,8 @@ async function runTryOnGeneration() {
   state.setError(null);
   setUserFacingError({ title: '' });
   state.setStatus('generating');
+  hasFinalResult = false;
+  lastResultImageUrl = null;
   generationPhase = 'queued';
   startGenerationTicker();
   updateGenerateButtonState();
@@ -638,7 +859,9 @@ async function runTryOnGeneration() {
       if (statusData.status === 'done') {
         const resultImageUrl = statusData.resultImageUrl;
         if (!resultImageUrl) throw new Error('Результат генерации не найден.');
+        lastResultImageUrl = resultImageUrl;
         generatedPreviewImage = await loadImageFromUrl(resultImageUrl);
+        hasFinalResult = true;
         await renderCurrent();
         stopGenerationTicker();
         setRendering(true, 'Готово: примерка успешно сгенерирована.');
@@ -655,20 +878,12 @@ async function runTryOnGeneration() {
 
     throw new Error('Превышено время ожидания результата. Попробуйте снова чуть позже.');
   } catch (err) {
-    // Optional visual fallback so user always sees a result in local demo.
-    try {
-      const fallbackItem = state.getSelectedItem();
-      if (fallbackItem) {
-        await applyClothingToPhoto({
-          canvas: elements.canvas,
-          photo: state.getPhoto(),
-          clothingItem: fallbackItem,
-          placement: fallbackItem.overlayPlacement,
-        });
-      }
-    } catch (fallbackErr) {
-      console.error('Fallback renderer failed:', fallbackErr);
-    }
+    // If generation failed, show the original image as the final result.
+    // This guarantees the user always sees a valid output (no partial overlays).
+    generatedPreviewImage = null;
+    lastResultImageUrl = null;
+    hasFinalResult = true;
+    await renderCurrent();
 
     const userErr = normalizeTryOnError(err, { stage: 'tryon' });
     setUserFacingError(userErr);
@@ -700,15 +915,72 @@ function canvasToBlob(canvas, type = 'image/png', quality) {
 
 async function downloadCurrentResult() {
   if (!elements.canvas) return;
-  const blob = await canvasToBlob(elements.canvas, 'image/png');
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'virtual-try-on.png';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  try {
+    // If we have a direct result URL from the AI service, prefer downloading it
+    // instead of exporting from canvas (canvas export can be blocked by CORS).
+    if (hasFinalResult && lastResultImageUrl) {
+      try {
+        const resp = await fetch(lastResultImageUrl, { mode: 'cors' });
+        if (!resp.ok) throw new Error(`Не удалось скачать результат: ${resp.status}`);
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'virtual-try-on.png';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        return;
+      } catch (directErr) {
+        // If CORS blocks fetch, fall back to opening the image URL.
+        window.open(lastResultImageUrl, '_blank', 'noopener,noreferrer');
+        const message = directErr instanceof Error ? directErr.message : String(directErr || '');
+        setUserFacingError({
+          title: 'Браузер не дал скачать результат автоматически.',
+          help: [
+            'Мы открыли результат в новой вкладке — сохраните изображение вручную.',
+            'Если нужно автоскачивание — настройте CORS на хостинге картинки (S3/Object Storage) или используйте прокси на своём API.',
+          ],
+          technical: message,
+        });
+        return;
+      }
+    }
+
+    const blob = await canvasToBlob(elements.canvas, 'image/png');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'virtual-try-on.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err || '');
+    const lower = message.toLowerCase();
+
+    // Some browsers block downloads from file:// pages with "The operation is insecure".
+    const likelyFileProtocolIssue =
+      window.location.protocol === 'file:' || lower.includes('insecure');
+
+    if (!likelyFileProtocolIssue) throw err;
+
+    // Fallback: open the image in a new tab, user can save it manually.
+    const dataUrl = elements.canvas.toDataURL('image/png');
+    window.open(dataUrl, '_blank', 'noopener,noreferrer');
+
+    setUserFacingError({
+      title: 'Браузер блокирует автосохранение на этой странице.',
+      help: [
+        'Откройте страницу через локальный сервер (http://), тогда “Сохранить” скачает файл автоматически.',
+        'Сейчас изображение открыто в новой вкладке — сохраните его вручную.',
+      ],
+      technical: message,
+    });
+  }
 }
 
 function buildShareLinks() {
@@ -775,10 +1047,28 @@ function setupUploadHandlers() {
   if (!elements.uploadZone || !elements.fileInput) return;
 
   function openFilePicker() {
+    const { status } = state.snapshot();
+    const isBusy = status === 'uploading' || status === 'generating';
+    if (isBusy) return;
+
+    // Allow selecting the same file again (otherwise 'change' may not fire).
+    elements.fileInput.value = '';
     elements.fileInput.click();
   }
 
-  elements.uploadZone.addEventListener('click', openFilePicker);
+  elements.uploadZone.addEventListener('click', (e) => {
+    // Avoid double-trigger when the click bubbles to the preview container.
+    e.stopPropagation();
+    openFilePicker();
+  });
+
+  // Allow replacing the photo by clicking the preview area.
+  elements.canvasWrap?.addEventListener('click', () => {
+    // When overlay is visible (no photo), uploadZone already covers the area.
+    // When photo is visible, the overlay is hidden, so clicking the preview should reopen picker.
+    if (elements.previewEmpty && !elements.previewEmpty.hidden) return;
+    openFilePicker();
+  });
 
   elements.uploadZone.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') openFilePicker();
@@ -814,6 +1104,7 @@ function setupUploadHandlers() {
     setUploading(true);
     state.setStatus('uploading');
     generatedPreviewImage = null;
+    hasFinalResult = false;
     updateResultActionsVisibility();
 
     try {
@@ -857,6 +1148,33 @@ function setupResize() {
       await renderCurrent();
     });
   });
+
+  if (typeof window.ResizeObserver !== 'function') return;
+  if (!elements.canvasWrap) return;
+
+  const ro = new ResizeObserver(() => {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(async () => {
+      prepareCanvasForRender();
+      await renderCurrent();
+    });
+  });
+  ro.observe(elements.canvasWrap);
+}
+
+function setupCatalogPagerMediaListener() {
+  if (!mobilePagerMql) return;
+
+  const handler = () => {
+    // When switching between desktop/mobile, rerender catalog and hide/show pager.
+    renderCatalogWithMobilePagination(currentCatalog, { resetPage: false });
+  };
+
+  if (typeof mobilePagerMql.addEventListener === 'function') {
+    mobilePagerMql.addEventListener('change', handler);
+  } else if (typeof mobilePagerMql.addListener === 'function') {
+    mobilePagerMql.addListener(handler);
+  }
 }
 
 async function boot() {
@@ -867,9 +1185,11 @@ async function boot() {
 
   ensureCategories();
   setupCategoryDropdown();
+  setupGenderDropdown();
   prepareCanvasForRender();
   setupUploadHandlers();
   setupResize();
+  setupCatalogPagerMediaListener();
   elements.generateButton?.addEventListener('click', async () => {
     await runTryOnGeneration();
   });

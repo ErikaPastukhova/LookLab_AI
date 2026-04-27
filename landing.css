@@ -725,6 +725,10 @@ h3 {
     grid-template-columns: 1fr;
   }
 
+  .section-soon .cards {
+    grid-template-columns: 1fr;
+  }
+
   .cards .card,
   .steps .step {
     grid-column: auto;

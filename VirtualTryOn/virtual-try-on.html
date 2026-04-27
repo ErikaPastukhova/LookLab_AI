@@ -20,62 +20,74 @@
   <main class="vto-layout">
     <section class="vto-left">
       <div class="vto-card">
-        <h2 class="vto-card-title">Загрузка фото</h2>
-        <p class="vto-help">
-          Подойдут портрет или полный рост. В кадре должны быть лицо и фигура целиком.
-          <br>Рекомендуемый формат: `image/jpeg` или `image/png`.
-        </p>
-
-        <div id="vto-upload-zone" class="vto-upload-zone" role="button" tabindex="0">
-          <div class="vto-upload-zone-inner">
-            <div class="vto-upload-icon">📷</div>
-            <div class="vto-upload-text">
-              Выберите файл
-            </div>
-          </div>
-          <input id="vto-file-input" class="vto-file-input" type="file" accept="image/*" />
-        </div>
-
-        <div id="vto-status-uploading" class="vto-status" hidden>
-          Загрузка изображения...
-        </div>
-
-        <div id="vto-status-notice" class="vto-status vto-status-notice" hidden></div>
-
-        <div id="vto-status-error" class="vto-status vto-status-error" hidden></div>
-      </div>
-
-      <div class="vto-card">
         <h2 class="vto-card-title">Выбор одежды</h2>
         <div class="vto-catalog-controls">
-          <label class="vto-select-label" for="vto-category-select">Категория</label>
-          <div class="vto-select-wrap">
-            <select id="vto-category-select" class="vto-select vto-select--native">
-              <option value="all">Все</option>
-            </select>
+          <div class="vto-filter-group">
+            <label class="vto-select-label" for="vto-gender-select">Пол</label>
+            <div class="vto-select-wrap">
+              <select id="vto-gender-select" class="vto-select vto-select--native">
+                <option value="all">Вся</option>
+                <option value="female">Женская</option>
+                <option value="male">Мужская</option>
+              </select>
 
-            <button
-              id="vto-category-trigger"
-              class="vto-select-trigger"
-              type="button"
-              aria-haspopup="listbox"
-              aria-expanded="false"
-            >
-              <span id="vto-category-value" class="vto-select-value">Все</span>
-              <span class="vto-select-chevron" aria-hidden="true"></span>
-            </button>
+              <button
+                id="vto-gender-trigger"
+                class="vto-select-trigger"
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+              >
+                <span id="vto-gender-value" class="vto-select-value">Вся</span>
+                <span class="vto-select-chevron" aria-hidden="true"></span>
+              </button>
 
-            <div
-              id="vto-category-menu"
-              class="vto-select-menu"
-              role="listbox"
-              aria-label="Категория"
-              hidden
-            ></div>
+              <div
+                id="vto-gender-menu"
+                class="vto-select-menu"
+                role="listbox"
+                aria-label="Пол"
+                hidden
+              ></div>
+            </div>
+          </div>
+
+          <div class="vto-filter-group">
+            <label class="vto-select-label" for="vto-category-select">Категория</label>
+            <div class="vto-select-wrap">
+              <select id="vto-category-select" class="vto-select vto-select--native">
+                <option value="all">Все</option>
+              </select>
+
+              <button
+                id="vto-category-trigger"
+                class="vto-select-trigger"
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded="false"
+              >
+                <span id="vto-category-value" class="vto-select-value">Все</span>
+                <span class="vto-select-chevron" aria-hidden="true"></span>
+              </button>
+
+              <div
+                id="vto-category-menu"
+                class="vto-select-menu"
+                role="listbox"
+                aria-label="Категория"
+                hidden
+              ></div>
+            </div>
           </div>
         </div>
 
         <div id="vto-catalog" class="vto-catalog-grid"></div>
+        <nav
+          id="vto-catalog-pagination"
+          class="vto-pagination"
+          aria-label="Страницы каталога"
+          hidden
+        ></nav>
 
         <div id="vto-catalog-hint" class="vto-hint" hidden>
           Выберите товар, чтобы его примерить.
@@ -87,48 +99,72 @@
       <div class="vto-preview-card">
         <h2 class="vto-card-title">Примерка</h2>
         <p class="vto-help">
-          После выбора одежды нажмите кнопку ниже. Генерация выполняется на AI-сервисе и может занять до минуты.
+          Генерация может занять до 2 минут.
         </p>
-
-        <button id="vto-generate-btn" class="vto-generate-btn" type="button" disabled>
-          Сгенерировать примерку
-        </button>
 
         <div class="vto-canvas-wrap">
           <canvas id="vto-canvas" class="vto-canvas"></canvas>
           <div id="vto-preview-empty" class="vto-overlay-info">
-            Загрузите фото и выберите предмет одежды.
-          </div>
-        </div>
+            <div class="vto-overlay-content">
+              <div id="vto-upload-zone" class="vto-upload-zone vto-overlay-upload" role="button" tabindex="0">
+                <div class="vto-upload-zone-inner">
+                  <div class="vto-upload-text">
+                    Выберите фото
+                  </div>
+                </div>
+                <input id="vto-file-input" class="vto-file-input" type="file" accept="image/*" />
+              </div>
 
-        <div id="vto-status-rendering" class="vto-status vto-status-loading" hidden>
-          <span class="vto-spinner" aria-hidden="true"></span>
-          <span id="vto-status-rendering-text">Генерируем результат...</span>
-        </div>
+              <div class="vto-overlay-status">
+                <div id="vto-status-uploading" class="vto-status" hidden>
+                  Загрузка изображения...
+                </div>
 
-        <div id="vto-result-actions" class="vto-result-actions" hidden>
-          <button id="vto-save-btn" class="vto-action-btn" type="button">
-            Сохранить
-          </button>
+                <div id="vto-status-notice" class="vto-status vto-status-notice" hidden></div>
 
-          <div class="vto-share">
-            <button id="vto-share-btn" class="vto-action-btn vto-action-btn--secondary" type="button" aria-haspopup="menu" aria-expanded="false">
-              Поделиться
-            </button>
-            <div id="vto-share-menu" class="vto-share-menu" role="menu" hidden>
-              <a id="vto-share-telegram" class="vto-share-link" role="menuitem" target="_blank" rel="noopener noreferrer">Telegram</a>
-              <a id="vto-share-whatsapp" class="vto-share-link" role="menuitem" target="_blank" rel="noopener noreferrer">WhatsApp</a>
-              <a id="vto-share-vk" class="vto-share-link" role="menuitem" target="_blank" rel="noopener noreferrer">VK</a>
+                <div id="vto-status-error" class="vto-status vto-status-error" hidden></div>
+              </div>
             </div>
           </div>
         </div>
+
+        <div class="vto-actions-spacer" aria-hidden="true"></div>
+
+        <div class="vto-actions-slot">
+          <div class="vto-generate-slot">
+            <div id="vto-status-rendering" class="vto-status vto-status-loading" hidden>
+              <span class="vto-spinner" aria-hidden="true"></span>
+              <span id="vto-status-rendering-text">Генерируем результат...</span>
+            </div>
+
+            <button id="vto-generate-btn" class="vto-generate-btn" type="button" disabled>
+              Сгенерировать примерку
+            </button>
+
+            <div id="vto-result-actions" class="vto-result-actions" hidden>
+              <button id="vto-save-btn" class="vto-action-btn" type="button">
+                Сохранить
+              </button>
+
+              <div class="vto-share">
+                <button id="vto-share-btn" class="vto-action-btn vto-action-btn--secondary" type="button" aria-haspopup="menu" aria-expanded="false">
+                  Поделиться
+                </button>
+                <div id="vto-share-menu" class="vto-share-menu" role="menu" hidden>
+                  <a id="vto-share-telegram" class="vto-share-link" role="menuitem" target="_blank" rel="noopener noreferrer">Telegram</a>
+                  <a id="vto-share-whatsapp" class="vto-share-link" role="menuitem" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+                  <a id="vto-share-vk" class="vto-share-link" role="menuitem" target="_blank" rel="noopener noreferrer">VK</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="vto-actions-spacer" aria-hidden="true"></div>
       </div>
     </section>
   </main>
 
-  <footer class="vto-footer">
-    <span>Виртуальная примерка с AI-генерацией.</span>
-  </footer>
 
   <script type="module" src="./virtualTryOn.js"></script>
   <script>
