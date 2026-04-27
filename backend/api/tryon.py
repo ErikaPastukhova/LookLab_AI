@@ -26,14 +26,22 @@ JOBS_LOCK = asyncio.Lock()
 
 
 def _map_catalog_category_to_fashn(category: str) -> str:
+    c = (category or "").strip().lower()
     mapped = {
+        # Canonical categories (legacy / generic).
         "top": "tops",
         "outerwear": "tops",
         "bottom": "bottoms",
         "skirt": "bottoms",
         "dress": "one-pieces",
+        # Catalog categories used by this project.
+        "tees_tops": "tops",
+        "shirts": "tops",
+        "pants": "bottoms",
+        "skirts": "bottoms",
+        "dresses": "one-pieces",
     }
-    return mapped.get((category or "").strip().lower(), "tops")
+    return mapped.get(c, "tops")
 
 
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:

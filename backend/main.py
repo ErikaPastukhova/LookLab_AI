@@ -13,7 +13,7 @@ from backend.services.storage import build_storage
 def create_app() -> FastAPI:
     settings = get_settings()
     storage = build_storage(settings)
-    catalog_service = CatalogService(settings=settings)
+    catalog_service = CatalogService(settings=settings, storage=storage)
     ai_provider = build_ai_provider(settings)
 
     app = FastAPI(title="Virtual Try-On API", version="0.1.0")

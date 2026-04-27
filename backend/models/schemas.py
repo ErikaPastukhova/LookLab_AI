@@ -8,6 +8,7 @@ class CatalogItem(BaseModel):
     name: str
     category: str
     categoryLabel: str
+    gender: str | None = None
     color: str
     garmentImageUrl: HttpUrl
 

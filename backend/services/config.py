@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     s3_endpoint_url: str = ""
     s3_url_ttl_seconds: int = 900
 
+    # Catalog source (Object Storage JSON).
+    # If not provided, the backend falls back to the demo mock catalog.
+    catalog_bucket: str = ""
+    catalog_object_key: str = "catalog/catalog.json"
+
     tryon_max_upload_mb: int = 10
 
     ai_provider: str = "mock"

@@ -14,7 +14,16 @@
   --vto-shadow: 0 12px 34px rgba(0,0,0,0.08);
   --vto-font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   --vto-catalog-gap: 10px;
-  --vto-catalog-card-h: 240px; /* desktop: ensures 2x2 visible */
+  --vto-catalog-card-h: 240px;
+  --vto-panel-h: clamp(420px, calc(100dvh - 140px), 740px);
+  --vto-preview-h: 500px;
+  --vto-primary-action-h: 44px;
+  --vto-catalog-viewport-h: clamp(320px, 46dvh, calc(var(--vto-catalog-card-h) * 2 + var(--vto-catalog-gap)));
+}
+
+/* Prevent fixed-height grid items from overflowing rows due to padding/border. */
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
 html, body {
@@ -80,18 +89,52 @@ html, body {
   padding: 20px;
   max-width: 1240px;
   margin: 0 auto;
+  align-items: stretch;
+  min-height: calc(100dvh - 72px);
 }
 
 @media (max-width: 900px) {
   .vto-layout {
     grid-template-columns: 1fr;
+    min-height: 0;
   }
   .vto-header-spacer {
     width: 10px;
   }
+
+  /* Mobile: allow panels to grow if content needs space. */
+  .vto-left > .vto-card,
+  .vto-preview-card {
+    height: auto;
+    flex: 0 0 auto;
+    min-height: 0;
+  }
+
+  /*
+    Mobile: prevent flex/percentage-height feedback loop where canvas tries to be 100% height
+    of an auto-height flex container (can cause huge/infinite vertical growth).
+  */
+  .vto-canvas-wrap {
+    flex: 0 0 auto;
+    height: clamp(260px, 55vh, 520px);
+  }
+}
+
+@media (min-width: 901px) {
+  /* Desktop: keep both columns strictly equal height. */
+  .vto-left > .vto-card,
+  .vto-preview-card {
+    height: var(--vto-panel-h);
+    flex: 0 0 var(--vto-panel-h);
+  }
 }
 
 @media (max-width: 520px) {
+  .vto-layout {
+    padding: 14px;
+    gap: 14px;
+  }
+
   .vto-back-text {
     display: none;
   }
@@ -103,16 +146,40 @@ html, body {
     gap: 0;
     justify-content: center;
   }
+
+  .vto-catalog-controls {
+    flex-wrap: wrap;
+  }
+
+  .vto-filter-group {
+    flex: 1 1 160px;
+  }
 }
 
 .vto-left, .vto-right {
   min-width: 0;
 }
 
+.vto-right {
+  display: flex;
+}
+
 .vto-left {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.vto-left > .vto-card {
+  flex: 0 0 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.vto-left > .vto-card,
+.vto-preview-card {
+  min-height: var(--vto-panel-h);
 }
 
 .vto-card, .vto-preview-card {
@@ -124,7 +191,12 @@ html, body {
 }
 
 .vto-preview-card {
-  min-height: 520px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 12px;
+  min-width: 0;
+  width: 100%;
   background:
     radial-gradient(circle at 92% 12%, rgba(194, 122, 210, 0.14) 0, rgba(194, 122, 210, 0.14) 14%, transparent 15%),
     var(--vto-color-surface);
@@ -138,23 +210,141 @@ html, body {
 }
 
 .vto-help {
-  margin: 0 0 14px;
+  margin: 0 0 10px;
   color: var(--vto-color-text-muted);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.35;
+}
+
+.vto-upload-block {
+  margin: 6px 0 12px;
+}
+
+.vto-upload-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  font-weight: 900;
+}
+
+.vto-overlay-info .vto-upload-text {
+  font-size: 16px;
+}
+
+.vto-overlay-content {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+  text-align: left;
+}
+
+.vto-overlay-info {
+  flex-direction: column;
+}
+
+.vto-overlay-info .vto-help {
+  margin-bottom: 0;
+}
+
+.vto-overlay-info .vto-upload-zone {
+  width: 100%;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vto-overlay-info .vto-upload-zone-inner {
+  width: 100%;
+  justify-content: center;
+}
+
+.vto-overlay-upload {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  border-radius: 0;
+  border-width: 0;
+  background: transparent;
+  padding: 18px;
+}
+
+.vto-overlay-upload:hover {
+  border-color: transparent;
+}
+
+.vto-overlay-upload .vto-upload-zone-inner {
+  min-height: 100%;
+}
+
+.vto-overlay-upload .vto-upload-text {
+  width: 100%;
+  text-align: center;
+}
+
+.vto-overlay-status {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 18px;
+  pointer-events: none;
+}
+
+.vto-overlay-status .vto-status {
+  margin-top: 0;
+}
+
+.vto-rendering-overlay,
+.vto-rendering-overlay[hidden] {
+  display: none !important;
+}
+
+.vto-actions-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 0 0 auto;
+  min-height: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.vto-actions-spacer {
+  flex: 0 0 12px;
+  height: 12px;
+}
+
+/* Нижний “зазор” даём padding-ом карточки, чтобы сверху/снизу было одинаково. */
+.vto-preview-card .vto-actions-spacer:last-of-type {
+  flex-basis: 0;
+  height: 0;
+}
+
+.vto-generate-slot {
+  width: 100%;
+  flex: 0 0 auto;
+  position: relative;
+  min-height: var(--vto-primary-action-h);
 }
 
 .vto-generate-btn {
   width: 100%;
+  min-height: var(--vto-primary-action-h);
   border: 1px solid #a8e47d;
   border-radius: var(--vto-btn-radius);
-  padding: 12px 14px;
-  margin-bottom: 12px;
+  padding: 10px 14px;
+  margin-bottom: 0;
   background: #9ff168;
   color: #111;
   font-size: 14px;
   font-weight: 900;
   cursor: pointer;
+  flex: 0 0 auto;
 }
 
 .vto-generate-btn:hover {
@@ -228,6 +418,22 @@ html, body {
   gap: 10px;
 }
 
+.vto-generate-slot > #vto-status-rendering,
+.vto-generate-slot > #vto-generate-btn,
+.vto-generate-slot > #vto-result-actions {
+  position: absolute;
+  inset: 0;
+}
+
+#vto-status-rendering {
+  height: var(--vto-primary-action-h);
+  border-radius: var(--vto-btn-radius);
+  border: 1px solid rgba(194, 122, 210, 0.25);
+  background: rgba(194, 122, 210, 0.1);
+  padding: 10px 14px;
+  margin-top: 0;
+}
+
 .vto-spinner {
   width: 16px;
   height: 16px;
@@ -249,12 +455,14 @@ html, body {
 .vto-result-actions {
   display: flex;
   gap: 10px;
-  margin-top: 10px;
+  margin-top: 0;
+  align-items: stretch;
 }
 
 .vto-action-btn {
   flex: 1;
   border-radius: var(--vto-btn-radius);
+  min-height: var(--vto-primary-action-h);
   padding: 10px 14px;
   font-weight: 900;
   cursor: pointer;
@@ -276,6 +484,11 @@ html, body {
 .vto-share {
   position: relative;
   flex: 1;
+  display: flex;
+}
+
+.vto-share > .vto-action-btn {
+  width: 100%;
 }
 
 .vto-share-menu {
@@ -359,10 +572,19 @@ html, body {
 
 .vto-catalog-controls {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 10px;
+  flex-wrap: nowrap;
+}
+
+.vto-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .vto-select-label {
@@ -471,8 +693,10 @@ html, body {
   grid-template-columns: 1fr 1fr;
   gap: var(--vto-catalog-gap);
   /* Keep the catalog viewport fixed to 2 rows (2x2 visible) */
-  grid-auto-rows: var(--vto-catalog-card-h);
-  height: calc(var(--vto-catalog-card-h) * 2 + var(--vto-catalog-gap));
+  grid-auto-rows: minmax(var(--vto-catalog-card-h), auto);
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding-right: 6px;
@@ -481,13 +705,15 @@ html, body {
 @media (max-width: 900px) {
   .vto-catalog-grid {
     grid-template-columns: 1fr 1fr;
-    /* On smaller screens cards are usually a bit shorter */
-    height: calc(210px * 2 + var(--vto-catalog-gap));
+    --vto-catalog-card-h: clamp(170px, 24dvh, 220px);
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: auto;
+    padding-right: 0;
   }
 }
 
 .vto-item-card {
-  height: var(--vto-catalog-card-h);
+  min-height: var(--vto-catalog-card-h);
   display: flex;
   flex-direction: column;
 }
@@ -499,7 +725,7 @@ html, body {
 
 @media (max-width: 520px) {
   .vto-catalog-grid {
-    height: calc(190px * 2 + var(--vto-catalog-gap));
+    --vto-catalog-card-h: clamp(160px, 22dvh, 200px);
   }
 }
 
@@ -570,10 +796,55 @@ html, body {
 }
 
 .vto-hint {
-  margin-top: 10px;
+  margin-top: auto;
   color: var(--vto-color-text-muted);
   font-size: 13px;
   font-weight: 700;
+}
+
+.vto-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.vto-pagination[hidden] {
+  display: none !important;
+}
+
+.vto-page-btn {
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(216, 221, 208, 1);
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--vto-color-text);
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.05);
+  transition: border-color 0.15s ease, transform 0.05s ease, background 0.15s ease;
+}
+
+.vto-page-btn:hover {
+  border-color: rgba(194, 122, 210, 0.55);
+}
+
+.vto-page-btn:active {
+  transform: scale(0.99);
+}
+
+.vto-page-btn.is-active,
+.vto-page-btn[aria-current="page"] {
+  border-color: rgba(194, 122, 210, 1);
+  background: rgba(194, 122, 210, 0.12);
+}
+
+.vto-page-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(194, 122, 210, 0.18), 0 8px 18px rgba(0,0,0,0.06);
 }
 
 .vto-canvas-wrap {
@@ -583,18 +854,17 @@ html, body {
   border-radius: var(--vto-radius-md);
   overflow: hidden;
   border: 1px solid rgba(226, 232, 240, 1);
+  flex: 1 1 auto;
+  min-height: clamp(180px, 34dvh, 520px);
+  display: flex;
+  min-width: 0;
 }
 
 .vto-canvas {
   display: block;
   width: 100%;
-  height: 420px;
-}
-
-@media (max-width: 900px) {
-  .vto-canvas {
-    height: 360px;
-  }
+  height: 100%;
+  max-width: 100%;
 }
 
 .vto-overlay-info {

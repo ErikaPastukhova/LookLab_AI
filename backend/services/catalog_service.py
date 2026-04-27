@@ -1,11 +1,19 @@
+from __future__ import annotations
+
+import json
+
+import httpx
+
 from backend.models.schemas import CatalogItem
 from backend.services.config import Settings
+from backend.services.storage import StorageService
 
 
 class CatalogService:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, storage: StorageService):
         self._settings = settings
-        self._items = self._build_mock_items()
+        self._storage = storage
+        self._items = self._load_items()
 
     def get_items(self) -> list[CatalogItem]:
         return self._items
@@ -13,23 +21,43 @@ class CatalogService:
     def get_item_by_id(self, item_id: str) -> CatalogItem | None:
         return next((item for item in self._items if item.id == item_id), None)
 
-    def _build_mock_items(self) -> list[CatalogItem]:
-        # Demo garment images. In production this should point to product assets from CMS/catalog.
-        return [
-            CatalogItem(
-                id="black-top-01",
-                name="Черный топ",
-                category="top",
-                categoryLabel="Топ",
-                color="#111827",
-                garmentImageUrl="https://storage.yandexcloud.net/onlinemannequin/%D0%9A%D0%B0%D1%82%D0%B0%D0%BB%D0%BE%D0%B3%20%D0%B2%D0%B5%D1%89%D0%B5%D0%B9/black_top.jpg",
-            ),
-            CatalogItem(
-                id="polka-tank-01",
-                name="Топ в горошек",
-                category="top",
-                categoryLabel="Топ",
-                color="#111827",
-                garmentImageUrl="https://storage.yandexcloud.net/onlinemannequin/%D0%9A%D0%B0%D1%82%D0%B0%D0%BB%D0%BE%D0%B3%20%D0%B2%D0%B5%D1%89%D0%B5%D0%B9/Polka_Tank.jpg",
-            ),
-        ]
+    def _load_items(self) -> list[CatalogItem]:
+        bucket = (self._settings.catalog_bucket or "").strip()
+        key = (self._settings.catalog_object_key or "").strip()
+
+        if not bucket or not key:
+            raise RuntimeError(
+                "Catalog is not configured. Set CATALOG_BUCKET and CATALOG_OBJECT_KEY (e.g. "
+                "CATALOG_BUCKET=onlinemannequin, CATALOG_OBJECT_KEY=catalog/catalog.json)."
+            )
+
+        # In production we typically use S3-backed storage for both media and catalog.
+        # For local dev we often keep media in local filesystem, while catalog lives in public Object Storage.
+        if self._settings.storage_backend == "s3":
+            raw = self._storage.read_bytes(key=key, bucket=bucket)
+        else:
+            url = f"https://storage.yandexcloud.net/{bucket}/{key}"
+            try:
+                with httpx.Client(timeout=20, follow_redirects=True, trust_env=False) as client:
+                    resp = client.get(url)
+                    resp.raise_for_status()
+                    raw = resp.content
+            except Exception as exc:  # noqa: BLE001 - surface context to ops
+                raise RuntimeError(f"Failed to fetch catalog via HTTP: {url}") from exc
+
+        if not raw:
+            raise RuntimeError(f"Catalog is empty or missing: s3://{bucket}/{key}")
+
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except Exception as exc:  # noqa: BLE001 - surface context to ops
+            raise RuntimeError(f"Failed to parse catalog JSON: s3://{bucket}/{key}") from exc
+
+        items_raw = payload.get("items") if isinstance(payload, dict) else None
+        if not isinstance(items_raw, list) or not items_raw:
+            raise RuntimeError(f"Catalog JSON has no items: s3://{bucket}/{key}")
+
+        items: list[CatalogItem] = []
+        for it in items_raw:
+            items.append(CatalogItem.model_validate(it))
+        return items
