@@ -114,7 +114,9 @@ function loadModel(gender) {
     currentGender = gender;
     
     // ВАЖНО: Проверь, что имя файла верное
-    const filename = (gender === 'male') ? './male_advanced.glb' : './female_advanced.glb';
+    const filename = (gender === 'male')
+        ? './assets/models/male_advanced.glb'
+        : './assets/models/female_advanced.glb';
 
     loader.load(filename, function (gltf) {
         modelRoot = gltf.scene;

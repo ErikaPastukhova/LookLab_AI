@@ -9,7 +9,7 @@
 
 Проект состоит из:
 - **Статического фронтенда** (landing + страницы демо) — отдается из **Yandex Object Storage** как сайт.
-- **Virtual Try-On фронта** (`VirtualTryOn/*`) — тоже статический, лежит в Object Storage.
+- **Virtual Try-On фронта** (`frontend/VirtualTryOn/*`) — тоже статический, лежит в Object Storage.
 - **Backend API (FastAPI)** — крутится на VM `om-backend` и принимает запросы от фронта через **API Gateway**.
 - **GPU inference VM** (`gpu-vm`) — отдельная GPU VM под `fashn-vton-1.5` (сейчас в облаке VM остановлена). Ее старт/стоп автоматизируется **Cloud Functions**.
 
@@ -28,8 +28,11 @@
 
 Внутри `graduation_project_erika_dasha/`:
 - **`README.md`**: описание проекта, локальный запуск, описание API.
-- **`index.html`, `landing.css`, `landing.js`, `request-form.js`, `script.js`, `style.css`, `ui/*`**: лендинг и “обвязка”.
-- **`VirtualTryOn/`**: отдельная страница виртуальной примерки и логика.
+- **`frontend/`**: весь статический фронтенд (landing + demo + VirtualTryOn + `ui/*` + ассеты).
+  - landing/demo страницы: `frontend/index.html`, `frontend/try.html`, `frontend/demo.html`
+  - стили/скрипты: `frontend/landing.css`, `frontend/style.css`, `frontend/script.js`, `frontend/request-form.js`, `frontend/ui/*`
+  - Virtual Try-On: `frontend/VirtualTryOn/*`
+  - 3D модели: `frontend/assets/models/*`
 - **`backend/`**: FastAPI backend.
   - `backend/main.py`: создание `FastAPI`, подключение роутеров, CORS, (опционально) static mount для локального storage.
   - `backend/api/*`: HTTP-эндпоинты.
@@ -235,6 +238,19 @@ sudo journalctl -u om-backend -f
 ## 6) Как “менять/обновлять/перезапускать” (runbook)
 
 Ниже перечислены типовые операции. Они **меняют состояние**, поэтому выполнять их только когда действительно нужно.
+
+### 6.0 Полный выкат (фронт + бэкенд)
+
+Один скрипт из репозитория проекта (нужны `yc` и `ssh` с доступом к VM):
+
+```bash
+git submodule update --init --recursive
+bash graduation_project_erika_dasha/scripts/deploy_yandex.sh
+```
+
+Скрипт: [scripts/deploy_yandex.sh](../scripts/deploy_yandex.sh) — по очереди вызывает выкат статики в бакет (см. [deploy_bucket_static.sh](../scripts/deploy_bucket_static.sh)) и доставку `backend/` на VM `om-backend` с `pip install` и `systemctl restart om-backend`.
+
+Переменные окружения: `BUCKET` (по умолчанию `onlinemannequin`), `OM_BACKEND_SSH` (по умолчанию `ubuntu@111.88.254.136`), `OM_SSH_IDENTITY` (опционально путь к ключу), `DRY_RUN=1` (только печать шагов). Флаги: `--frontend-only` (только бакет), `--backend-only` (только VM).
 
 ### 6.1 Перезапуск backend
 

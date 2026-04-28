@@ -54,6 +54,9 @@ BE_PID=$!
 
 # 3) Frontend static server
 FRONTEND_PORT="$(pick_free_port 5500 5599)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$ROOT/frontend"
 python3 -m http.server "$FRONTEND_PORT" &
 FE_PID=$!
 

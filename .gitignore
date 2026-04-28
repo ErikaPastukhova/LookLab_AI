@@ -1,0 +1,8 @@
+.DS_Store
+
+# Local env / venv
+.env
+.venv/
+
+# Local storage (generated images)
+backend/storage_data/
