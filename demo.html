@@ -4,9 +4,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Визуализатор Посадки — Демо</title>
+  <script>
+    (function () {
+      try {
+        var mq = window.matchMedia && window.matchMedia('(max-width: 1024px)');
+        if (mq && mq.matches) document.documentElement.classList.add('mobile-ui-pending');
+      } catch (_) {}
+    })();
+  </script>
+  <style>
+    /* Prevent a brief “desktop panels” flash on mobile before style.css/js are ready. */
+    @media (max-width: 1024px) {
+      html.mobile-ui-pending #left-panel,
+      html.mobile-ui-pending #ui-panel {
+        display: none !important;
+      }
+    }
+  </style>
   <link href="style.css" rel="stylesheet" type="text/css" />
 </head>
 <body>
+  <!-- MOBILE: init loader (prevents empty screen while JS assembles bottom-sheet) -->
+  <div id="mobile-init-overlay" class="loading-overlay" aria-live="polite" aria-busy="true">
+    <div class="loading-spinner" aria-hidden="true"></div>
+    <span>Загружаем интерфейс...</span>
+  </div>
+
   <!-- MOBILE: top bar -->
   <header class="mobile-topbar" aria-label="Заголовок страницы">
     <a href="index.html" class="mobile-topbar-back" aria-label="Назад">←</a>
@@ -307,9 +330,9 @@
   <div class="modal-content large-modal">
     
     <div class="modal-header">
-      <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div class="body-scan-header">
         <h4 style="margin: 0;">Скан тела</h4>
-        <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+        <div class="body-scan-header-controls">
           <div style="display: flex; align-items: center; gap: 6px;">
             <label for="body-scan-height" style="font-size: 14px;">Рост (см):</label>
             <input type="number" id="body-scan-height" min="140" max="220" value="175" style="width: 60px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
@@ -398,7 +421,7 @@
 
       <div id="body-scan-footer" style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
           <span id="body-scan-summary" style="font-size: 13px; color: #555;"></span>
-          <div id="body-scan-params" style="display: none; flex-direction: row; flex-wrap: nowrap; gap: 12px; align-items: flex-end;">
+          <div id="body-scan-params" style="display: none; flex-direction: row; flex-wrap: wrap; gap: 12px; align-items: flex-end;">
             <div style="display: flex; align-items: center; gap: 6px; margin: 0;">
               <label style="min-width: 50px; margin: 0;">Грудь</label>
               <input type="number" id="body-scan-chest" min="70" max="160" placeholder="—" style="width: 55px;">
@@ -420,7 +443,7 @@
               <input type="number" id="body-scan-leg" min="40" max="90" placeholder="—" style="width: 55px;">
             </div>
           </div>
-          <span style="font-size: 12px; color: #888;">Скорректируйте значения при необходимости, затем нажмите «Готово».</span>
+          <span id="body-scan-adjust-hint" style="font-size: 12px; color: #888; display: none;">Скорректируйте значения при необходимости, затем нажмите «Готово».</span>
           <button id="btn-body-scan-done" class="primary-btn" style="margin-top: 4px; display: none; align-self: flex-start;">
             Готово
           </button>

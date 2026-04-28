@@ -807,6 +807,7 @@ input[name="gender-select"]:checked + span {
   align-items: center;
   justify-content: center;
   position: relative;
+  box-sizing: border-box;
 }
 
 .body-scan-zone-placeholder {
@@ -848,13 +849,16 @@ input[name="gender-select"]:checked + span {
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .body-scan-zone-preview canvas {
-  max-width: 120px;
-  max-height: 180px;
+  display: block;
   width: auto;
   height: auto;
+  max-width: 160px;
+  max-height: 240px;
   border-radius: 4px;
   background: #1e293b;
 }
@@ -1154,6 +1158,35 @@ input[name="gender-select"]:checked + span {
     --mobile-sheet-peek: 124px;
   }
 
+  /*
+    Prevent a brief “desktop panels” flash on mobile.
+    The demo moves #left-panel/#ui-panel into the bottom-sheet via JS after load.
+  */
+  body:not(.mobile-ui-ready) #left-panel,
+  body:not(.mobile-ui-ready) #ui-panel {
+    display: none !important;
+  }
+
+  html.mobile-ui-pending #left-panel,
+  html.mobile-ui-pending #ui-panel {
+    display: none !important;
+  }
+
+  /* Show init loader only while mobile UI is pending. */
+  #mobile-init-overlay {
+    display: none;
+  }
+
+  html.mobile-ui-pending #mobile-init-overlay {
+    display: flex;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  html.mobile-ui-ready #mobile-init-overlay {
+    display: none;
+  }
+
   .mobile-topbar {
     position: fixed;
     top: 0;
@@ -1378,5 +1411,103 @@ input[name="gender-select"]:checked + span {
   body.mobile-sheet-expanded #bottom-ui {
     opacity: 0;
     pointer-events: none;
+  }
+}
+
+/* --- BODY SCAN: RESPONSIVE MODAL --- */
+@media (max-width: 1024px) {
+  #body-scan-modal .modal-content.large-modal {
+    width: calc(100% - 16px);
+    max-height: calc(100vh - 16px);
+    border-radius: 22px;
+  }
+
+  #body-scan-modal .modal-header {
+    padding: 12px 14px;
+  }
+
+  /* Use classes instead of relying on inline styles */
+  #body-scan-modal .body-scan-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  #body-scan-modal .body-scan-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  #body-scan-modal .body-scan-select-wrap {
+    min-width: 132px;
+  }
+
+  #body-scan-modal .modal-body {
+    padding: 14px;
+  }
+
+  .body-scan-tips {
+    font-size: 12px;
+  }
+
+  .body-scan-tips ul {
+    padding-left: 18px;
+  }
+
+  .body-scan-upload-row {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 12px;
+  }
+
+  .body-scan-upload-zone {
+    min-width: 0;
+    width: 100%;
+    padding: 18px 14px !important;
+  }
+
+  .body-scan-side-upload {
+    min-height: 120px !important;
+    padding: 18px 14px !important;
+  }
+
+  .body-scan-zone-preview {
+    width: 100%;
+  }
+
+  .body-scan-zone-preview canvas {
+    max-height: 34vh;
+    max-width: 160px;
+    width: auto;
+    height: auto;
+  }
+
+  #body-scan-summary {
+    font-size: 12px;
+  }
+
+  /* Body-scan params row: allow wrapping on narrow screens */
+  #body-scan-params {
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    align-items: flex-end;
+  }
+
+  #body-scan-params > div {
+    flex: 1 1 140px;
+    min-width: 140px;
+  }
+}
+
+@media (max-width: 420px) {
+  #body-scan-modal .body-scan-header-controls {
+    gap: 8px;
+  }
+
+  #body-scan-modal .body-scan-select-wrap {
+    min-width: 120px;
   }
 }

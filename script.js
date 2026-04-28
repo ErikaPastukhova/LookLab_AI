@@ -505,6 +505,11 @@ function initMobileBottomSheet() {
     setExpanded(false);
     setTab('cloth');
 
+    // Mark mobile UI as ready to avoid “desktop panels” flash.
+    document.documentElement.classList.remove('mobile-ui-pending');
+    document.documentElement.classList.add('mobile-ui-ready');
+    document.body.classList.add('mobile-ui-ready');
+
     handle.addEventListener('click', () => setExpanded(!isExpanded()));
     tabCloth.addEventListener('click', () => { setTab('cloth'); setExpanded(true); });
     tabBody.addEventListener('click', () => { setTab('body'); setExpanded(true); });
@@ -1212,6 +1217,7 @@ document.addEventListener('keydown', (e) => {
     const ctx = canvas ? canvas.getContext('2d') : null;
     const ctxSide = canvasSide ? canvasSide.getContext('2d') : null;
     const summaryEl = document.getElementById('body-scan-summary');
+    const adjustHintEl = document.getElementById('body-scan-adjust-hint');
     const btnCompute = document.getElementById('btn-body-compute');
     const btnDone = document.getElementById('btn-body-scan-done');
     const heightInput = document.getElementById('body-scan-height');
@@ -1284,10 +1290,14 @@ document.addEventListener('keydown', (e) => {
 
     btnOpen.onclick = () => {
         modal.style.display = 'flex';
+        // demo.html renders modal markup after the script tag, so init dropdown on open.
+        ensureBodyScanGenderDropdown();
         ensurePoseLandmarker(); // Предзагрузка модели в фоне
         fileInput.value = "";
         if (fileInputSideCanvas) fileInputSideCanvas.value = "";
         summaryEl.textContent = "";
+        if (adjustHintEl) adjustHintEl.style.display = 'none';
+        if (btnCompute) btnCompute.style.display = '';
         if (btnDone) btnDone.style.display = 'none';
         if (paramsContainer) paramsContainer.style.display = 'none';
         if (frontPlaceholder) frontPlaceholder.style.display = 'flex';
@@ -1304,7 +1314,11 @@ document.addEventListener('keydown', (e) => {
         if (heightInput) heightInput.value = inputs.body.height.num.value || "175";
         const bodyScanGender = document.getElementById('body-scan-gender');
         const mainGender = getMainGenderValue();
-        if (bodyScanGender && mainGenderInputs.length) bodyScanGender.value = mainGender;
+        if (bodyScanGender && mainGenderInputs.length) {
+            bodyScanGender.value = mainGender;
+            // Important: sync custom dropdown UI + dependent recalculations.
+            bodyScanGender.dispatchEvent(new Event('change', { bubbles: true }));
+        }
         syncDefaultWeight(mainGender, true);
     };
 
@@ -1318,6 +1332,8 @@ document.addEventListener('keydown', (e) => {
         el.addEventListener('change', () => {
             if (bodyScanGender && mainGenderInputs.includes(el)) {
                 bodyScanGender.value = getMainGenderValue();
+                // Keep body scan UI in sync when main gender changes.
+                bodyScanGender.dispatchEvent(new Event('change', { bubbles: true }));
             }
             const activeGender = bodyScanGender ? bodyScanGender.value : getMainGenderValue();
             syncDefaultWeight(activeGender, false);
@@ -1326,15 +1342,17 @@ document.addEventListener('keydown', (e) => {
     });
 
     // Custom dropdown for gender (like VirtualTryOn).
-    (function initBodyScanGenderDropdown() {
-        if (!bodyScanGender) return;
+    let bodyScanGenderDropdownInited = false;
+    function ensureBodyScanGenderDropdown() {
+        if (bodyScanGenderDropdownInited) return;
+        const selectEl = document.getElementById('body-scan-gender');
         const trigger = document.getElementById('body-scan-gender-trigger');
         const valueEl = document.getElementById('body-scan-gender-value');
         const menu = document.getElementById('body-scan-gender-menu');
-        if (!trigger || !valueEl || !menu) return;
+        if (!selectEl || !trigger || !valueEl || !menu) return;
 
         function syncTriggerFromSelect() {
-            const selected = bodyScanGender.selectedOptions?.[0];
+            const selected = selectEl.selectedOptions?.[0];
             valueEl.textContent = selected?.textContent || '';
         }
 
@@ -1356,9 +1374,9 @@ document.addEventListener('keydown', (e) => {
 
         function rebuildMenuFromSelect() {
             menu.innerHTML = '';
-            const currentValue = bodyScanGender.value;
+            const currentValue = selectEl.value;
 
-            for (const opt of bodyScanGender.options) {
+            for (const opt of selectEl.options) {
                 const el = document.createElement('div');
                 el.className = 'body-scan-select-option';
                 el.setAttribute('role', 'option');
@@ -1366,8 +1384,8 @@ document.addEventListener('keydown', (e) => {
                 el.textContent = opt.textContent || opt.value;
                 el.setAttribute('aria-selected', opt.value === currentValue ? 'true' : 'false');
                 el.addEventListener('click', () => {
-                    bodyScanGender.value = opt.value;
-                    bodyScanGender.dispatchEvent(new Event('change', { bubbles: true }));
+                    selectEl.value = opt.value;
+                    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
                     syncTriggerFromSelect();
                     rebuildMenuFromSelect();
                     closeMenu();
@@ -1386,7 +1404,7 @@ document.addEventListener('keydown', (e) => {
         window.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeMenu();
         });
-        bodyScanGender.addEventListener('change', () => {
+        selectEl.addEventListener('change', () => {
             syncTriggerFromSelect();
             rebuildMenuFromSelect();
         });
@@ -1394,7 +1412,8 @@ document.addEventListener('keydown', (e) => {
         syncTriggerFromSelect();
         rebuildMenuFromSelect();
         closeMenu();
-    })();
+        bodyScanGenderDropdownInited = true;
+    }
 
     btnClose.onclick = () => { modal.style.display = 'none'; };
     if (btnDone) btnDone.onclick = () => {
@@ -2646,6 +2665,8 @@ document.addEventListener('keydown', (e) => {
         } else {
             summaryEl.textContent = "";
         }
+        if (adjustHintEl) adjustHintEl.style.display = parts.length > 0 ? 'inline' : 'none';
+        if (btnCompute) btnCompute.style.display = parts.length > 0 ? 'none' : '';
         if (btnDone) btnDone.style.display = parts.length > 0 ? 'block' : 'none';
     }
 
