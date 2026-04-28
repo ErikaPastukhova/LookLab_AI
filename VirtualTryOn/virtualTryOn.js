@@ -778,8 +778,10 @@ async function loadCatalogFromApi() {
 async function loadImageFromUrl(url) {
   const img = new Image();
   img.decoding = 'async';
-  // Allow drawing to canvas and exporting when the image host sends CORS headers.
-  img.crossOrigin = 'anonymous';
+  // Do not set crossOrigin: presigned Object Storage URLs often work without bucket CORS
+  // for <img> / drawImage; with crossOrigin='anonymous' the load fails unless the bucket
+  // sends Access-Control-Allow-Origin. Canvas may be tainted; «Сохранить» uses result URL
+  // (fetch + fallback to a new tab) instead of canvas export when needed.
   img.src = url;
   await new Promise((resolve, reject) => {
     img.onload = () => resolve();
