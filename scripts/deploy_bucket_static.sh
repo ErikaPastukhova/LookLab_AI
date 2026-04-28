@@ -17,19 +17,19 @@ BUCKET="${BUCKET:-onlinemannequin}"
 DRY_RUN="${DRY_RUN:-}"
 
 FILES=(
-  index.html
-  try.html
-  demo.html
-  style.css
-  script.js
-  landing.css
-  request-form.js
-  VirtualTryOn/virtual-try-on.html
-  VirtualTryOn/virtualTryOn.js
-  VirtualTryOn/virtualTryOn.css
-  VirtualTryOn/catalog/categories.js
-  ui/messages.js
-  ui/messages.css
+  "index.html|frontend/index.html"
+  "try.html|frontend/try.html"
+  "demo.html|frontend/demo.html"
+  "style.css|frontend/style.css"
+  "script.js|frontend/script.js"
+  "landing.css|frontend/landing.css"
+  "request-form.js|frontend/request-form.js"
+  "VirtualTryOn/virtual-try-on.html|frontend/VirtualTryOn/virtual-try-on.html"
+  "VirtualTryOn/virtualTryOn.js|frontend/VirtualTryOn/virtualTryOn.js"
+  "VirtualTryOn/virtualTryOn.css|frontend/VirtualTryOn/virtualTryOn.css"
+  "VirtualTryOn/catalog/categories.js|frontend/VirtualTryOn/catalog/categories.js"
+  "ui/messages.js|frontend/ui/messages.js"
+  "ui/messages.css|frontend/ui/messages.css"
 )
 
 content_type_for() {
@@ -48,7 +48,7 @@ blocked_bucket_key() {
 
 upload_one() {
   local key="$1"
-  local path="$ROOT/$key"
+  local path="$2"
   local ct
   ct="$(content_type_for "$key")"
 
@@ -75,8 +75,11 @@ upload_one() {
 
 main() {
   command -v yc >/dev/null 2>&1 || { echo "yc CLI not found" >&2; exit 1; }
-  for key in "${FILES[@]}"; do
-    upload_one "$key"
+  local entry
+  for entry in "${FILES[@]}"; do
+    local key="${entry%%|*}"
+    local rel="${entry#*|}"
+    upload_one "$key" "$ROOT/$rel"
   done
   echo "Done: ${#FILES[@]} object(s) -> s3://${BUCKET}/"
 }

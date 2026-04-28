@@ -14,6 +14,8 @@ bash scripts/deploy_bucket_static.sh
 
 Скрипт залижает нужные HTML/CSS/JS в бакет `onlinemannequin` с корректными `Content-Type` и не трогает корневой префикс `catalog/` в бакете. Полный операционный контекст — [docs/RUNBOOK_YANDEX_CLOUD.md](docs/RUNBOOK_YANDEX_CLOUD.md) (раздел 6.5).
 
+Полный выкат **фронта и бэкенда** на Yandex Cloud: `bash scripts/deploy_yandex.sh` (см. runbook, раздел 6.0).
+
 ## Сбор заявок (форма на лендинге) → Google Sheets
 
 На лендинге в `index.html` есть форма «Оставить заявку». Для сохранения заявок в Google Sheets используйте Google Apps Script Web App.
@@ -55,9 +57,10 @@ uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 
 ### 2) Frontend
 
-Запустите любой статический сервер из корня репозитория, например:
+Запустите любой статический сервер из директории `frontend/`, например:
 
 ```bash
+cd frontend
 python3 -m http.server 5500
 ```
 
