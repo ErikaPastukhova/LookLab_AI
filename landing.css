@@ -162,6 +162,7 @@ body {
 .try-screen {
   width: 100%;
   min-height: calc(100vh - 72px);
+  min-height: calc(100dvh - 72px);
 }
 
 .section-try {
@@ -757,6 +758,36 @@ h3 {
 }
 
 @media (max-width: 620px) {
+  .try-card {
+    padding: 18px;
+    min-height: 0;
+  }
+
+  .try-card::after {
+    width: 120px;
+    height: 120px;
+    right: -44px;
+    bottom: -54px;
+  }
+
+  .try-card-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 22px;
+    margin-bottom: 10px;
+  }
+
+  .try-card-title {
+    font-size: 22px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .try-card-text {
+    font-size: 14px;
+    max-width: none;
+  }
+
   .hero h1 {
     font-size: 42px;
   }
@@ -787,5 +818,19 @@ h3 {
     padding: 0;
     gap: 0;
     justify-content: center;
+  }
+}
+
+@media (max-width: 380px) {
+  .try-grid {
+    gap: 12px;
+  }
+
+  .try-card {
+    padding: 16px;
+  }
+
+  .try-card-title {
+    font-size: 20px;
   }
 }
