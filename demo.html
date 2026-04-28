@@ -7,6 +7,8 @@
   <script>
     (function () {
       try {
+        // Global loader: show until UI & 3D model are ready.
+        document.documentElement.classList.add('ui-pending');
         var mq = window.matchMedia && window.matchMedia('(max-width: 1024px)');
         if (mq && mq.matches) document.documentElement.classList.add('mobile-ui-pending');
       } catch (_) {}
@@ -24,8 +26,8 @@
   <link href="style.css" rel="stylesheet" type="text/css" />
 </head>
 <body>
-  <!-- MOBILE: init loader (prevents empty screen while JS assembles bottom-sheet) -->
-  <div id="mobile-init-overlay" class="loading-overlay" aria-live="polite" aria-busy="true">
+  <!-- Init loader: shown until UI & 3D model are ready -->
+  <div id="init-overlay" class="loading-overlay" aria-live="polite" aria-busy="true">
     <div class="loading-spinner" aria-hidden="true"></div>
     <span>Загружаем интерфейс...</span>
   </div>
@@ -192,17 +194,6 @@
   }
   </script>
 
-  <script type="module" src="./script.js"></script>
-  <script>
-    (function () {
-      const params = new URLSearchParams(window.location.search);
-      const backHref = params.get('from') === 'try' ? 'try.html' : 'index.html';
-      document.querySelectorAll('.btn-exit-demo, .mobile-topbar-back').forEach((el) => {
-        el.setAttribute('href', backHref);
-      });
-    })();
-  </script>
-
   <!-- НИЖНЯЯ ПАНЕЛЬ: ЛЕГЕНДА И КАМЕРА -->
   <div id="bottom-ui">
     
@@ -333,15 +324,7 @@
       <div class="body-scan-header">
         <h4 style="margin: 0;">Скан тела</h4>
         <div class="body-scan-header-controls">
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <label for="body-scan-height" style="font-size: 14px;">Рост (см):</label>
-            <input type="number" id="body-scan-height" min="140" max="220" value="175" style="width: 60px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          </div>
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <label for="body-scan-weight" style="font-size: 14px;">Вес (кг):</label>
-            <input type="number" id="body-scan-weight" min="35" max="220" value="60" style="width: 60px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-          </div>
-          <div style="display: flex; align-items: center; gap: 6px;">
+          <div class="body-scan-header-row">
             <label for="body-scan-gender" style="font-size: 14px;">Пол:</label>
             <div class="body-scan-select-wrap">
               <select id="body-scan-gender" class="body-scan-select body-scan-select--native">
@@ -367,6 +350,16 @@
                 aria-label="Пол"
                 hidden
               ></div>
+            </div>
+          </div>
+          <div class="body-scan-header-row body-scan-header-row--metrics">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <label for="body-scan-height" style="font-size: 14px;">Рост (см):</label>
+              <input type="number" id="body-scan-height" min="140" max="220" value="175" style="width: 60px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <label for="body-scan-weight" style="font-size: 14px;">Вес (кг):</label>
+              <input type="number" id="body-scan-weight" min="35" max="220" value="60" style="width: 60px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
             </div>
           </div>
         </div>
@@ -458,6 +451,18 @@
   <span id="loading-text">Анализируем позу...</span>
 </div>
   
+  <!-- Scripts: keep after modals so scan UI is present -->
+  <script type="module" src="./script.js"></script>
+  <script>
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const backHref = params.get('from') === 'try' ? 'try.html' : 'index.html';
+      document.querySelectorAll('.btn-exit-demo, .mobile-topbar-back').forEach((el) => {
+        el.setAttribute('href', backHref);
+      });
+    })();
+  </script>
+
 </body>
 </html>
 

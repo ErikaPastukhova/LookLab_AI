@@ -37,6 +37,7 @@ def _map_catalog_category_to_fashn(category: str) -> str:
         # Catalog categories used by this project.
         "tees_tops": "tops",
         "shirts": "tops",
+        "sweaters": "tops",
         "pants": "bottoms",
         "skirts": "bottoms",
         "dresses": "one-pieces",

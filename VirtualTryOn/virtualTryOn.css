@@ -444,6 +444,12 @@ html, body {
   flex: 0 0 auto;
 }
 
+.vto-spinner--lg {
+  width: 22px;
+  height: 22px;
+  border-width: 3px;
+}
+
 @keyframes vto-spin {
   to { transform: rotate(360deg); }
 }
@@ -693,13 +699,46 @@ html, body {
   grid-template-columns: 1fr 1fr;
   gap: var(--vto-catalog-gap);
   /* Keep the catalog viewport fixed to 2 rows (2x2 visible) */
-  grid-auto-rows: minmax(var(--vto-catalog-card-h), auto);
+  grid-auto-rows: var(--vto-catalog-card-h);
   flex: 1 1 auto;
   min-height: 0;
   height: auto;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding-right: 6px;
+}
+
+.vto-catalog-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.vto-catalog-loader {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(247, 249, 239, 0.82);
+  border-radius: var(--vto-radius-sm);
+  border: 1px solid rgba(216, 221, 208, 0.9);
+  color: rgba(15, 23, 42, 0.82);
+  font-weight: 900;
+}
+
+.vto-catalog-loader[hidden] {
+  display: none !important;
+}
+
+.vto-catalog-loader-text {
+  font-size: 13px;
+  font-weight: 900;
 }
 
 @media (max-width: 900px) {
@@ -713,7 +752,7 @@ html, body {
 }
 
 .vto-item-card {
-  min-height: var(--vto-catalog-card-h);
+  height: var(--vto-catalog-card-h);
   display: flex;
   flex-direction: column;
 }
@@ -735,7 +774,6 @@ html, body {
   padding: 10px;
   background: #fff;
   cursor: pointer;
-  min-height: 86px;
   transition: transform 0.05s, border-color 0.15s;
 }
 

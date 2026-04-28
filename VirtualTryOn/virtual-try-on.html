@@ -81,7 +81,20 @@
           </div>
         </div>
 
-        <div id="vto-catalog" class="vto-catalog-grid"></div>
+        <div class="vto-catalog-wrap" aria-busy="false">
+          <div
+            id="vto-catalog-loader"
+            class="vto-catalog-loader"
+            role="status"
+            aria-live="polite"
+            aria-label="Загрузка каталога"
+            hidden
+          >
+            <span class="vto-spinner vto-spinner--lg" aria-hidden="true"></span>
+            <span class="vto-catalog-loader-text">Загружаем каталог…</span>
+          </div>
+          <div id="vto-catalog" class="vto-catalog-grid"></div>
+        </div>
         <nav
           id="vto-catalog-pagination"
           class="vto-pagination"

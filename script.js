@@ -175,6 +175,10 @@ function loadModel(gender) {
         if (humanMesh) updateAll();
         frameModelFront();
 
+        // Hide init loader once the first model is loaded and framed.
+        document.documentElement.classList.remove('ui-pending');
+        document.documentElement.classList.add('ui-ready');
+
     }, undefined, function(e) {
         showError({
             title: 'Не удалось загрузить 3D‑модель.',
@@ -185,6 +189,10 @@ function loadModel(gender) {
             ],
             technical: e && e.message ? e.message : String(e || ''),
         });
+
+        // Even on error, stop blocking the UI behind the loader.
+        document.documentElement.classList.remove('ui-pending');
+        document.documentElement.classList.add('ui-ready');
     });
 }
 

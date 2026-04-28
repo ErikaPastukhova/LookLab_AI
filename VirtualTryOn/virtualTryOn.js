@@ -17,6 +17,8 @@ const elements = {
   categoryValue: document.getElementById('vto-category-value'),
   categoryMenu: document.getElementById('vto-category-menu'),
   catalog: document.getElementById('vto-catalog'),
+  catalogLoader: document.getElementById('vto-catalog-loader'),
+  catalogWrap: document.querySelector('.vto-catalog-wrap'),
   catalogPagination: document.getElementById('vto-catalog-pagination'),
   catalogHint: document.getElementById('vto-catalog-hint'),
 
@@ -236,6 +238,16 @@ function normalizeTryOnError(err, { stage } = {}) {
 function setUploading(isUploading) {
   if (!elements.statusUploading) return;
   elements.statusUploading.hidden = !isUploading;
+}
+
+function setCatalogLoading(isLoading) {
+  if (elements.catalogLoader) elements.catalogLoader.hidden = !isLoading;
+  if (elements.catalogWrap) elements.catalogWrap.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+  if (elements.catalog) {
+    elements.catalog.style.opacity = isLoading ? '0.45' : '';
+    elements.catalog.style.pointerEvents = isLoading ? 'none' : '';
+  }
+  if (elements.catalogPagination) elements.catalogPagination.style.pointerEvents = isLoading ? 'none' : '';
 }
 
 function setRendering(isRendering, text = 'Генерируем результат...') {
@@ -1225,8 +1237,13 @@ async function boot() {
   updateGenerateButtonState();
   updateResultActionsVisibility();
 
-  const items = await loadCatalogFromApi();
-  initCatalog(items);
+  setCatalogLoading(true);
+  try {
+    const items = await loadCatalogFromApi();
+    initCatalog(items);
+  } finally {
+    setCatalogLoading(false);
+  }
 }
 
 boot();
