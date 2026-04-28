@@ -8,6 +8,7 @@ export function getAllCategories(genderValue = 'all') {
   return [
     { value: 'tees_tops', label: teesLabel },
     { value: 'shirts', label: 'Рубашки' },
+    { value: 'sweaters', label: 'Свитер' },
     { value: 'pants', label: 'Штаны' },
     { value: 'skirts', label: 'Юбки' },
     { value: 'dresses', label: 'Платья' },

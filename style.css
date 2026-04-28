@@ -607,6 +607,36 @@ input[name="gender-select"]:checked + span {
   align-items: flex-start;
 }
 
+/* Ensure controls never overlap the title */
+#body-scan-modal .body-scan-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+#body-scan-modal .body-scan-header h4 {
+  line-height: 1.2;
+}
+
+/* Body scan header layout (desktop): gender on top, height+weight in a row below */
+#body-scan-modal .body-scan-header-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#body-scan-modal .body-scan-header-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+#body-scan-modal .body-scan-header-row--metrics {
+  gap: 16px;
+}
+
 #measure-modal .modal-header {
   align-items: flex-start;
 }
@@ -717,7 +747,8 @@ input[name="gender-select"]:checked + span {
   border: 1px solid var(--color-border);
   border-radius: 12px;
   background: #fffefb;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--color-text);
   cursor: pointer;
   display: flex;
@@ -780,7 +811,8 @@ input[name="gender-select"]:checked + span {
 .body-scan-select-option {
   padding: 10px 12px;
   border-radius: 12px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   user-select: none;
 }
@@ -857,7 +889,8 @@ input[name="gender-select"]:checked + span {
   display: block;
   width: auto;
   height: auto;
-  max-width: 160px;
+  /* Desktop preview can be wider; actual canvas size is set in JS (drawBodyImage). */
+  max-width: 280px;
   max-height: 240px;
   border-radius: 4px;
   background: #1e293b;
@@ -1054,6 +1087,12 @@ input[name="gender-select"]:checked + span {
   transition: opacity 0.3s;
 }
 
+/* Ensure init overlay is visible by default when shown (even without .active). */
+#init-overlay {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .loading-overlay.active {
   opacity: 1;
   pointer-events: auto;
@@ -1172,18 +1211,18 @@ input[name="gender-select"]:checked + span {
     display: none !important;
   }
 
-  /* Show init loader only while mobile UI is pending. */
-  #mobile-init-overlay {
+  /* Init loader: keep visible while we're pending on mobile. */
+  #init-overlay {
     display: none;
   }
 
-  html.mobile-ui-pending #mobile-init-overlay {
+  html.mobile-ui-pending #init-overlay {
     display: flex;
     opacity: 1;
     pointer-events: auto;
   }
 
-  html.mobile-ui-ready #mobile-init-overlay {
+  html.mobile-ui-ready #init-overlay {
     display: none;
   }
 
@@ -1414,8 +1453,19 @@ input[name="gender-select"]:checked + span {
   }
 }
 
+/* Init loader: visible while html.ui-pending is set (desktop + mobile). */
+html.ui-pending #init-overlay {
+  display: flex;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+html.ui-ready #init-overlay {
+  display: none;
+}
+
 /* --- BODY SCAN: RESPONSIVE MODAL --- */
-@media (max-width: 1024px) {
+@media (max-width: 820px) {
   #body-scan-modal .modal-content.large-modal {
     width: calc(100% - 16px);
     max-height: calc(100vh - 16px);
@@ -1436,13 +1486,21 @@ input[name="gender-select"]:checked + span {
 
   #body-scan-modal .body-scan-header-controls {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 10px;
+  }
+
+  #body-scan-modal .body-scan-header-row {
     flex-wrap: wrap;
+    gap: 10px;
   }
 
   #body-scan-modal .body-scan-select-wrap {
     min-width: 132px;
+  }
+
+  .body-scan-select-trigger {
+    font-size: 14px;
   }
 
   #body-scan-modal .modal-body {
@@ -1509,5 +1567,19 @@ input[name="gender-select"]:checked + span {
 
   #body-scan-modal .body-scan-select-wrap {
     min-width: 120px;
+  }
+}
+
+/* Body scan params should wrap on tablets too (can overflow in one row). */
+@media (max-width: 1024px) and (min-width: 821px) {
+  #body-scan-params {
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    align-items: flex-end;
+  }
+
+  #body-scan-params > div {
+    flex: 1 1 160px;
+    min-width: 160px;
   }
 }
