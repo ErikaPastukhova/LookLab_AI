@@ -246,9 +246,9 @@
         <h4 class="measure-header-title">AI Линейка</h4>
         <div class="body-scan-select-wrap">
           <select id="clothing-type-selector" class="body-scan-select body-scan-select--native" aria-label="Тип одежды">
+            <option value="dress" selected>Полный (Платье/Комбинезон)</option>
             <option value="top">Верх (Футболка/Кофта)</option>
-            <option value="bottom">Низ (Джинсы/Штаны)</option>
-            <option value="dress">Полный (Платье)</option>
+            <option value="bottom">Низ (Брюки/Юбка)</option>
           </select>
 
           <button
@@ -274,32 +274,70 @@
       <button id="close-modal" class="icon-btn" aria-label="Закрыть">✕</button>
     </div>
     
-    <!-- Тело -->
+    <!-- Тело модалки умного сканера -->
     <div class="modal-body">
       
-      <!-- Шаг 1: Загрузка -->
-      <div id="step-upload" class="step-container">
-        <div class="upload-zone measure-upload-zone">
-          <span style="font-size: 40px;">📷</span>
-          <p>Перетащите фото сюда или кликните</p>
-          <small>Положите рядом лист А4 или карту для масштаба</small>
-          <input type="file" id="image-upload" accept="image/*">
+      <!-- ШАГ 0: Выбор типа одежды -->
+      <div id="step-select-type" class="step-container">
+        <h3 style="text-align: center; margin-bottom: 20px;">Выберите, какой предмет одежды вы хотите отсканировать:</h3>
+        <div class="clothing-type-cards">
+          <button class="type-card-btn" data-type="top">
+            <span class="type-icon">👕</span>
+            <div>
+              <span class="type-title">Верх</span>
+              <span class="type-desc">Футболка или кофта</span>
+            </div>
+          </button>
+          <button class="type-card-btn" data-type="bottom">
+            <span class="type-icon">👖</span>
+            <div>
+              <span class="type-title">Низ</span>
+              <span class="type-desc">Брюки или юбка</span>
+            </div>
+          </button>
+          <button class="type-card-btn" data-type="dress">
+            <span class="type-icon">👗</span>
+            <div>
+              <span class="type-title">Полный</span>
+              <span class="type-desc">Платье или комбинезон</span>
+            </div>
+          </button>
         </div>
       </div>
 
-      <!-- Шаг 2: Работа с фото -->
+      <!-- ШАГ 1: Загрузка -->
+      <div id="step-upload" class="step-container" style="display: none;">
+        <div class="upload-zone measure-upload-zone">
+          <span style="font-size: 40px;">📷</span>
+          <p>Загрузите фото одежды</p>
+          <input type="file" id="image-upload" accept="image/*">
+        </div>
+        
+        <div class="body-scan-tips" style="margin-top: 16px;">
+          <div class="body-scan-tips-title">📸 Советы по съемке</div>
+          <ul>
+            <li>Положите одежду на ровную однотонную поверхность контрастного цвета</li>
+            <li>Лист А4 положите рядом</li>
+            <li>Сделайте фото строго сверху, чтобы не допустить визуальной деформации одежды</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- ШАГ 2: Работа с фото -->
       <div id="step-canvas" class="step-container" style="display: none;">
         
         <!-- Панель инструментов над фото -->
         <div class="canvas-toolbar">
           <div id="instruction-badge" class="instruction-badge">
-            📌 Отметьте лист A4
+            📌 Нажмите на 4 угла листа А4 на фото
           </div>
-          <div class="toolbar-actions">
-            <button id="btn-auto-detect" class="magic-btn">✨ Авто-поиск</button>
+          <div class="toolbar-actions" style="display: flex; gap: 6px; align-items: center;">
+            <button id="btn-prev-step" class="secondary-btn" style="padding: 0 12px;">Назад</button>
             <button id="btn-skip-step" class="secondary-btn">Пропустить</button>
-            <button id="btn-undo" class="secondary-btn">↩</button>
+            <button id="btn-undo" class="secondary-btn" style="padding: 0 12px; font-weight: bold;" title="Отменить">←</button>
+            <button id="btn-redo" class="secondary-btn" style="padding: 0 12px; font-weight: bold;" title="Вернуть">→</button>
           </div>
+
         </div>
 
         <div class="canvas-wrapper">
@@ -309,7 +347,10 @@
         <!-- Итог текущего шага -->
         <div id="scan-footer" style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center; visibility: hidden;">
           <span style="font-weight: bold; font-size: 16px;">Результат: <span id="scan-val" style="color: #007bff;">0</span> см</span>
-          <button id="btn-confirm-step" class="primary-btn">Применить и Далее →</button>
+          <div style="display: flex; gap: 10px;">
+            <button id="btn-reset-step" class="secondary-btn">Заново</button>
+            <button id="btn-confirm-step" class="primary-btn" style="color: #171717 !important;">Применить и далее →</button>
+          </div>
         </div>
       </div>
     </div>
