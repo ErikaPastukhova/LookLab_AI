@@ -24,6 +24,8 @@ FILES=(
   "script.js|frontend/script.js"
   "landing.css|frontend/landing.css"
   "request-form.js|frontend/request-form.js"
+  "assets/models/female_advanced.glb|frontend/assets/models/female_advanced.glb"
+  "assets/models/male_advanced.glb|frontend/assets/models/male_advanced.glb"
   "VirtualTryOn/virtual-try-on.html|frontend/VirtualTryOn/virtual-try-on.html"
   "VirtualTryOn/virtualTryOn.js|frontend/VirtualTryOn/virtualTryOn.js"
   "VirtualTryOn/virtualTryOn.css|frontend/VirtualTryOn/virtualTryOn.css"
@@ -37,6 +39,7 @@ content_type_for() {
     html) echo "text/html; charset=utf-8" ;;
     css)  echo "text/css; charset=utf-8" ;;
     js)   echo "application/javascript; charset=utf-8" ;;
+    glb)  echo "model/gltf-binary" ;;
     *)    echo "application/octet-stream" ;;
   esac
 }
