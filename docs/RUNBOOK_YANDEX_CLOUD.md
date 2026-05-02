@@ -106,7 +106,8 @@
 
 #### Бакет “сайт + каталог”
 - **bucket**: `onlinemannequin`
-- в корне лежат: `index.html`, `landing.css`, `landing.js`, `script.js`, `style.css`, `demo.html`, `try.html`, `.glb` модели
+- в корне лежат: `index.html`, `landing.css`, `landing.js`, `script.js`, `style.css`, `demo.html`, `try.html`
+- **3D модели онлайн-манекена**: `assets/models/*.glb`
 - **VirtualTryOn**: `VirtualTryOn/virtual-try-on.html`, `VirtualTryOn/virtualTryOn.js`, `VirtualTryOn/virtualTryOn.css`, и т.д.
 - **каталог одежды**: `catalog/catalog.json`
 - **картинки одежды**: `catalog/garments/*`
@@ -324,7 +325,7 @@ git submodule update --init --recursive
 bash graduation_project_erika_dasha/scripts/deploy_bucket_static.sh
 ```
 
-Скрипт: [scripts/deploy_bucket_static.sh](../scripts/deploy_bucket_static.sh) — заливает полный набор статики (включая `request-form.js`), выставляет **`Content-Type`** (`text/html`, `text/css`, `application/javascript` с `charset=utf-8`), чтобы браузер не предлагал «сохранить страницу» вместо отображения. Ключи в бакете с префиксом **`catalog/`** (корневой каталог одежды) скрипт **не трогает**; путь `VirtualTryOn/catalog/categories.js` разрешён.
+Скрипт: [scripts/deploy_bucket_static.sh](../scripts/deploy_bucket_static.sh) — заливает полный набор статики (включая `request-form.js` и модели `assets/models/*.glb`), выставляет **`Content-Type`** (`text/html`, `text/css`, `application/javascript` с `charset=utf-8`, `model/gltf-binary` для `.glb`), чтобы браузер не предлагал «сохранить страницу» вместо отображения. Ключи в бакете с префиксом **`catalog/`** (корневой каталог одежды) скрипт **не трогает**; путь `VirtualTryOn/catalog/categories.js` разрешён.
 
 Ручная заливка одного файла (при необходимости задайте `--content-type`):
 
