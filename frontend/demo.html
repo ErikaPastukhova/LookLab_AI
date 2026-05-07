@@ -325,19 +325,17 @@
 
       <!-- ШАГ 2: Работа с фото -->
       <div id="step-canvas" class="step-container" style="display: none;">
-        
         <!-- Панель инструментов над фото -->
         <div class="canvas-toolbar">
           <div id="instruction-badge" class="instruction-badge">
             📌 Нажмите на 4 угла листа А4 на фото
           </div>
           <div class="toolbar-actions" style="display: flex; gap: 6px; align-items: center;">
-            <button id="btn-prev-step" class="secondary-btn" style="padding: 0 12px;">Назад</button>
-            <button id="btn-skip-step" class="secondary-btn">Пропустить</button>
-            <button id="btn-undo" class="secondary-btn" style="padding: 0 12px; font-weight: bold;" title="Отменить">←</button>
-            <button id="btn-redo" class="secondary-btn" style="padding: 0 12px; font-weight: bold;" title="Вернуть">→</button>
+            <button id="btn-prev-step" class="btn secondary-btn" style="padding: 0 12px;">Назад</button>
+            <button id="btn-skip-step" class="btn secondary-btn" style="padding: 0 12px;">Пропустить</button>
+            <button id="btn-undo" class="btn secondary-btn" style="padding: 0 12px; font-weight: bold;" title="Отменить">←</button>
+            <button id="btn-redo" class="btn secondary-btn" style="padding: 0 12px; font-weight: bold;" title="Вернуть">→</button>
           </div>
-
         </div>
 
         <div class="canvas-wrapper">
@@ -348,8 +346,8 @@
         <div id="scan-footer" style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center; visibility: hidden;">
           <span style="font-weight: bold; font-size: 16px;">Результат: <span id="scan-val" style="color: #007bff;">0</span> см</span>
           <div style="display: flex; gap: 10px;">
-            <button id="btn-reset-step" class="secondary-btn">Заново</button>
-            <button id="btn-confirm-step" class="primary-btn" style="color: #171717 !important;">Применить и далее →</button>
+            <button id="btn-reset-step" class="btn secondary-btn">Заново</button>
+            <button id="btn-confirm-step" class="btn primary-btn" style="color: #171717 !important;">Применить и далее →</button>
           </div>
         </div>
       </div>

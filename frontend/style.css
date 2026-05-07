@@ -1631,3 +1631,15 @@ html.ui-ready #init-overlay {
 .magic-btn {
   color: #171717 !important;
 }
+
+/* --- СТИЛИ ДЛЯ НЕАКТИВНЫХ КНОПОК --- */
+button:disabled,
+.btn:disabled,
+.secondary-btn:disabled,
+.primary-btn:disabled,
+.icon-btn:disabled {
+  opacity: 0.4 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  filter: grayscale(100%);
+}

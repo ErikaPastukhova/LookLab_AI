@@ -807,7 +807,20 @@ document.addEventListener('keydown', (e) => {
         document.getElementById('step-upload').style.display = 'none';
         document.getElementById('step-canvas').style.display = 'none';
         document.querySelector('.measure-header-row .body-scan-select-wrap').style.display = 'none';
+        
+        // ПРИНУДИТЕЛЬНЫЙ СБРОС ВСЕГО СОСТОЯНИЯ
         fileInput.value = "";
+        currentStepIndex = 0;
+        clicks = [];
+        redoStack = [];
+        scaleFactor = 0;
+        a4Zone.active = false;
+        
+        // Прячем и подвал, и сам текст результата
+        if (scanFooter) scanFooter.style.visibility = 'hidden';
+        if (scanVal && scanVal.parentNode) scanVal.parentNode.style.visibility = 'hidden';
+        
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
     };
     
     btnClose.onclick = () => { document.getElementById('measure-modal').style.display = 'none'; };
@@ -823,12 +836,17 @@ document.addEventListener('keydown', (e) => {
         };
     });
 
+    fileInput.onclick = function() {
+        this.value = null;
+    };
+
     fileInput.onchange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
         reader.onload = (evt) => {
             img.onload = () => startSession();
+            img.src = ''; // Принудительно очищаем src, чтобы onload сработал 100%
             img.src = evt.target.result;
         };
         reader.readAsDataURL(file);
@@ -850,21 +868,8 @@ document.addEventListener('keydown', (e) => {
         canvas.height = img.height * ratio;
         
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        try {
-            imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        } catch (e) {
-            imgData = null;
-            showNotice({
-                title: 'Браузер заблокировал анализ изображения.',
-                help: [
-                    'Откройте сайт через локальный сервер (не file://).',
-                    'Если фото “вставлено” из внешнего источника — сохраните его как файл и загрузите заново.',
-                    'Попробуйте другой браузер.',
-                ],
-                technical: e && e.message ? e.message : String(e || ''),
-                autoHideMs: 0,
-            });
-        }
+        
+        // Блок try-catch с getImageData удален, так как он мог прерывать скрипт
 
         updateUI();
     }
@@ -909,6 +914,17 @@ document.addEventListener('keydown', (e) => {
         }
     }
 
+    // НОВАЯ ФУНКЦИЯ: Обновление состояния кнопок
+    function updateButtonsState() {
+        if (!btnUndo || !btnRedo) return;
+        
+        // Кнопка "<-" активна только если есть хотя бы 1 поставленная точка
+        btnUndo.disabled = (clicks.length === 0);
+        
+        // Кнопка "->" активна только если в памяти есть отмененные точки
+        btnRedo.disabled = (redoStack.length === 0);
+    }
+
     canvas.onclick = (e) => {
         const step = activeQueue[currentStepIndex];
         const maxClicks = step.count;
@@ -927,12 +943,19 @@ document.addEventListener('keydown', (e) => {
         redoStack = []; 
         draw();
         checkResult();
+        updateButtonsState(); // Обновляем кнопки после клика
     };
 
-    // Управление кнопками истории
-    btnUndo.onclick = () => { if(clicks.length > 0) { redoStack.push(clicks.pop()); draw(); checkResult(); } };
-    btnRedo.onclick = () => { if(redoStack.length > 0) { clicks.push(redoStack.pop()); draw(); checkResult(); } };
-    btnResetStep.onclick = () => { clicks = []; redoStack = []; draw(); checkResult(); };
+    // Управление кнопками истории (добавлено обновление состояний)
+    btnUndo.onclick = () => { 
+        if(clicks.length > 0) { redoStack.push(clicks.pop()); draw(); checkResult(); updateButtonsState(); } 
+    };
+    btnRedo.onclick = () => { 
+        if(redoStack.length > 0) { clicks.push(redoStack.pop()); draw(); checkResult(); updateButtonsState(); } 
+    };
+    btnResetStep.onclick = () => { 
+        clicks = []; redoStack = []; draw(); checkResult(); updateButtonsState(); 
+    };
 
     btnPrevStep.onclick = () => {
         if (currentStepIndex > 0) {
@@ -945,6 +968,8 @@ document.addEventListener('keydown', (e) => {
         } else {
             document.getElementById('step-canvas').style.display = 'none';
             document.getElementById('step-upload').style.display = 'block';
+            
+            fileInput.value = "";
         }
     };
 
@@ -953,30 +978,42 @@ document.addEventListener('keydown', (e) => {
 
     function checkResult() {
         const step = activeQueue[currentStepIndex];
+        
+        // Если поставлены ВСЕ нужные точки
         if (clicks.length === step.count) {
-            let valCm = 0;
+            
+            // 1. Показываем подвал с кнопками "Заново" и "Далее"
+            if (scanFooter) scanFooter.style.visibility = 'visible';
+            
             if (step.id === 'a4') {
-                let maxDist = 0;
-                for (let i = 0; i < clicks.length; i++) {
-                    const p1 = clicks[i];
-                    const p2 = clicks[(i + 1) % clicks.length]; 
-                    const d = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-                    if (d > maxDist) maxDist = d;
+                // Для А4 текст не нужен
+                if (scanVal && scanVal.parentNode) {
+                    scanVal.parentNode.style.visibility = 'hidden';
                 }
-                valCm = 29.7; 
-                scanVal.innerText = "29.7 (A4)";
             } else {
+                // Считаем размер
                 const dist = Math.hypot(clicks[1].x - clicks[0].x, clicks[1].y - clicks[0].y);
-                if (scaleFactor === 0) return;
+                const safeScale = (scaleFactor && scaleFactor > 0) ? scaleFactor : 1;
+                const valCm = (dist / safeScale) * 2;
                 
-                // ВАЖНО: Умножение на 2 для перевода ширины одежды в полный обхват
-                valCm = (dist / scaleFactor) * 2;
-                
-                scanVal.innerText = Math.round(valCm);
+                // Выводим размер и ПОКАЗЫВАЕМ текст
+                if (scanVal) {
+                    scanVal.innerText = Math.round(valCm);
+                    if (scanVal.parentNode) {
+                        scanVal.parentNode.style.visibility = 'visible';
+                    }
+                }
             }
-            scanFooter.style.visibility = 'visible';
+            
         } else {
-            scanFooter.style.visibility = 'hidden';
+            // Если точек МЕНЬШЕ нужного (в начале шага или если нажали "отмена")
+            // 1. Прячем кнопки
+            if (scanFooter) scanFooter.style.visibility = 'hidden';
+            
+            // 2. Прячем сам текст результата
+            if (scanVal && scanVal.parentNode) {
+                scanVal.parentNode.style.visibility = 'hidden';
+            }
         }
     }
 
@@ -1023,7 +1060,12 @@ document.addEventListener('keydown', (e) => {
         clicks = [];
         redoStack = []; 
         draw();
-        scanFooter.style.visibility = 'hidden';
+        
+        // Прячем и кнопки, и текст в начале каждого шага
+        if (scanFooter) scanFooter.style.visibility = 'hidden';
+        if (scanVal && scanVal.parentNode) scanVal.parentNode.style.visibility = 'hidden';
+        
+        updateButtonsState(); // Обнуляем кнопки
         
         const step = activeQueue[currentStepIndex];
         
