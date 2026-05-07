@@ -316,15 +316,40 @@
         <div class="body-scan-tips" style="margin-top: 16px;">
           <div class="body-scan-tips-title">📸 Советы по съемке</div>
           <ul>
-            <li>Положите одежду на ровную однотонную поверхность контрастного цвета</li>
-            <li>Лист А4 положите рядом</li>
+            <li>Положите одежду на ровную поверхность</li>
+            <li>Лист А4 ИЛИ любой предмет известной длины положите рядом</li>
             <li>Сделайте фото строго сверху, чтобы не допустить визуальной деформации одежды</li>
           </ul>
         </div>
       </div>
 
+      <!-- ШАГ 1.5: Выбор калибровки -->
+      <div id="step-calib-choice" class="step-container" style="display: none;">
+        <h3 style="text-align: center; margin-bottom: 20px;">Как вы хотите задать масштаб?</h3>
+        <div class="clothing-type-cards">
+          <button class="type-card-btn" id="btn-calib-a4">
+            <span class="type-icon">📄</span>
+            <div>
+              <span class="type-title">По листу А4</span>
+              <span class="type-desc">Нужно отметить 4 угла (Стандарт 29.7 см)</span>
+            </div>
+          </button>
+          <button class="type-card-btn" id="btn-calib-custom">
+            <span class="type-icon">📏</span>
+            <div>
+              <span class="type-title">Свой предмет</span>
+              <span class="type-desc">Отметить 2 точки и вручную написать размер</span>
+            </div>
+          </button>
+        </div>
+        <div style="text-align: center; margin-top: 20px;">
+            <button id="btn-back-to-upload" class="btn secondary-btn">← Вернуться к загрузке фото</button>
+        </div>
+      </div>
+
       <!-- ШАГ 2: Работа с фото -->
       <div id="step-canvas" class="step-container" style="display: none;">
+        
         <!-- Панель инструментов над фото -->
         <div class="canvas-toolbar">
           <div id="instruction-badge" class="instruction-badge">
@@ -342,9 +367,20 @@
           <canvas id="measure-canvas"></canvas>
         </div>
 
-        <!-- Итог текущего шага -->
+        <!-- Итог текущего шага (с полем ввода для своего предмета) -->
         <div id="scan-footer" style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center; visibility: hidden;">
-          <span style="font-weight: bold; font-size: 16px;">Результат: <span id="scan-val" style="color: #007bff;">0</span> см</span>
+          
+          <div id="scan-result-container" style="display: flex; align-items: center;">
+              <!-- Стандартный текст результата -->
+              <span id="scan-val-text" style="font-weight: bold; font-size: 16px;">Результат: <span id="scan-val" style="color: #007bff;">0</span> см</span>
+              
+              <!-- Инпут для своего предмета (изначально скрыт) -->
+              <div id="scan-custom-input-container" style="display: none; align-items: center; gap: 8px;">
+                  <span style="font-weight: bold; font-size: 14px;">Размер предмета:</span>
+                  <input type="number" id="scan-custom-val" min="1" max="500" placeholder="см" style="width: 70px; padding: 6px; text-align: center; border: 1px solid #d8ddd0; border-radius: 8px; font-weight: bold;">
+              </div>
+          </div>
+
           <div style="display: flex; gap: 10px;">
             <button id="btn-reset-step" class="btn secondary-btn">Заново</button>
             <button id="btn-confirm-step" class="btn primary-btn" style="color: #171717 !important;">Применить и далее →</button>

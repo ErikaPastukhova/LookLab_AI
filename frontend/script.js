@@ -708,6 +708,11 @@ document.addEventListener('keydown', (e) => {
     const scanFooter = document.getElementById('scan-footer');
     const scanVal = document.getElementById('scan-val');
     
+    // Новые UI элементы
+    const scanValText = document.getElementById('scan-val-text');
+    const scanCustomContainer = document.getElementById('scan-custom-input-container');
+    const scanCustomInput = document.getElementById('scan-custom-val');
+    
     // Кнопки управления
     const btnSkip = document.getElementById('btn-skip-step');
     const btnUndo = document.getElementById('btn-undo');
@@ -717,7 +722,7 @@ document.addEventListener('keydown', (e) => {
     const btnConfirm = document.getElementById('btn-confirm-step');
     const typeCards = document.querySelectorAll('.type-card-btn');
 
-    // Логика кастомного выпадающего списка
+    // Логика выпадающего списка
     (function initMeasureClothingTypeDropdown() {
         if (!typeSelect) return;
         const trigger = document.getElementById('measure-clothing-trigger');
@@ -772,25 +777,21 @@ document.addEventListener('keydown', (e) => {
     let clicks = [];
     let redoStack = []; 
     let currentStepIndex = 0;
-    let a4Zone = { minX: 0, maxX: 0, minY: 0, maxY: 0, active: false };
 
-    // СЦЕНАРИИ
+    // СЦЕНАРИИ (Без жесткой привязки А4, он добавится динамически)
     const SCENARIOS = {
         top: [
-            { id: 'a4',    name: 'листа А4', color: '#ff4444', count: 4 },
             { id: 'chest', name: 'ширину груди', color: '#007bff', count: 2 },
             { id: 'waist', name: 'ширину талии', color: '#28a745', count: 2 },
             { id: 'hips',  name: 'ширину бедер', color: '#ffc107', count: 2 },
             { id: 'arm',   name: 'ширину рукава', color: '#17a2b8', count: 2 }
         ],
         bottom: [
-            { id: 'a4',    name: 'листа А4', color: '#ff4444', count: 4 },
             { id: 'waist', name: 'ширину пояса', color: '#28a745', count: 2 },
             { id: 'hips',  name: 'ширину бедер', color: '#ffc107', count: 2 },
             { id: 'leg',   name: 'ширину штанины', color: '#17a2b8', count: 2 }
         ],
         dress: [
-            { id: 'a4',    name: 'листа А4', color: '#ff4444', count: 4 },
             { id: 'chest', name: 'ширину груди', color: '#007bff', count: 2 },
             { id: 'waist', name: 'ширину талии', color: '#28a745', count: 2 },
             { id: 'hips',  name: 'ширину бедер', color: '#ffc107', count: 2 },
@@ -800,25 +801,24 @@ document.addEventListener('keydown', (e) => {
 
     let activeQueue = [];
 
-    // ОТКРЫТИЕ МОДАЛКИ (ШАГ ВЫБОРА)
+    // ОТКРЫТИЕ МОДАЛКИ
     btnOpen.onclick = () => { 
         document.getElementById('measure-modal').style.display = 'flex';
         document.getElementById('step-select-type').style.display = 'block';
         document.getElementById('step-upload').style.display = 'none';
+        document.getElementById('step-calib-choice').style.display = 'none';
         document.getElementById('step-canvas').style.display = 'none';
         document.querySelector('.measure-header-row .body-scan-select-wrap').style.display = 'none';
         
-        // ПРИНУДИТЕЛЬНЫЙ СБРОС ВСЕГО СОСТОЯНИЯ
         fileInput.value = "";
         currentStepIndex = 0;
         clicks = [];
         redoStack = [];
         scaleFactor = 0;
-        a4Zone.active = false;
         
-        // Прячем и подвал, и сам текст результата
         if (scanFooter) scanFooter.style.visibility = 'hidden';
-        if (scanVal && scanVal.parentNode) scanVal.parentNode.style.visibility = 'hidden';
+        if (scanValText) scanValText.style.display = 'none';
+        if (scanCustomContainer) scanCustomContainer.style.display = 'none';
         
         ctx.clearRect(0, 0, canvas.width, canvas.height);
     };
@@ -836,31 +836,50 @@ document.addEventListener('keydown', (e) => {
         };
     });
 
-    fileInput.onclick = function() {
-        this.value = null;
-    };
-
+    // Обработка загрузки фото
+    fileInput.onclick = function() { this.value = null; };
     fileInput.onchange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
         reader.onload = (evt) => {
-            img.onload = () => startSession();
-            img.src = ''; // Принудительно очищаем src, чтобы onload сработал 100%
+            img.onload = () => {
+                document.getElementById('step-upload').style.display = 'none';
+                document.getElementById('step-calib-choice').style.display = 'block'; // Переход к выбору масштаба
+            };
+            img.src = '';
             img.src = evt.target.result;
         };
         reader.readAsDataURL(file);
     };
 
-    function startSession() {
-        document.getElementById('step-upload').style.display = 'none';
+    // Кнопка возврата к загрузке фото
+    document.getElementById('btn-back-to-upload').onclick = () => {
+        document.getElementById('step-calib-choice').style.display = 'none';
+        document.getElementById('step-upload').style.display = 'block';
+        fileInput.value = "";
+    };
+
+    // ВЫБОР КАЛИБРОВКИ
+    document.getElementById('btn-calib-a4').onclick = () => {
+        startCanvasSession({ id: 'a4', name: 'листа А4', color: '#ff4444', count: 4 });
+    };
+
+    document.getElementById('btn-calib-custom').onclick = () => {
+        startCanvasSession({ id: 'custom_calib', name: 'предмета', color: '#ff4444', count: 2 });
+    };
+
+    function startCanvasSession(calibStep) {
+        document.getElementById('step-calib-choice').style.display = 'none';
         document.getElementById('step-canvas').style.display = 'block';
         
         const type = typeSelect.value;
-        activeQueue = [...SCENARIOS[type]]; 
+        // Вставляем шаг калибровки в начало списка параметров
+        activeQueue = [calibStep, ...SCENARIOS[type]]; 
         currentStepIndex = 0;
         scaleFactor = 0;
-        a4Zone.active = false; 
+        clicks = [];
+        redoStack = [];
 
         const maxWidth = 800;
         const ratio = maxWidth / img.width;
@@ -868,9 +887,6 @@ document.addEventListener('keydown', (e) => {
         canvas.height = img.height * ratio;
         
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        
-        // Блок try-catch с getImageData удален, так как он мог прерывать скрипт
-
         updateUI();
     }
 
@@ -881,7 +897,7 @@ document.addEventListener('keydown', (e) => {
         const step = activeQueue[currentStepIndex];
         const color = step ? step.color : 'white';
 
-        if (currentStepIndex === 0 && clicks.length > 0) {
+        if (step && step.id === 'a4' && clicks.length > 0) {
             ctx.fillStyle = "rgba(255, 68, 68, 0.3)"; 
             ctx.strokeStyle = color;
             ctx.lineWidth = 2;
@@ -891,12 +907,6 @@ document.addEventListener('keydown', (e) => {
             if (clicks.length === 4) ctx.closePath(); 
             ctx.fill();
             ctx.stroke();
-        }
-
-        if (a4Zone.active && currentStepIndex > 0) {
-             ctx.strokeStyle = "rgba(255, 0, 0, 0.3)";
-             ctx.lineWidth = 1;
-             ctx.strokeRect(a4Zone.minX, a4Zone.minY, a4Zone.maxX - a4Zone.minX, a4Zone.maxY - a4Zone.minY);
         }
 
         clicks.forEach((p) => {
@@ -912,16 +922,20 @@ document.addEventListener('keydown', (e) => {
             ctx.lineTo(clicks[1].x, clicks[1].y);
             ctx.stroke();
         }
+        
+        // Рисуем линию и для кастомного предмета (это тоже нулевой шаг, но там 2 клика)
+        if (step && step.id === 'custom_calib' && clicks.length === 2) {
+            ctx.strokeStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(clicks[0].x, clicks[0].y);
+            ctx.lineTo(clicks[1].x, clicks[1].y);
+            ctx.stroke();
+        }
     }
 
-    // НОВАЯ ФУНКЦИЯ: Обновление состояния кнопок
     function updateButtonsState() {
         if (!btnUndo || !btnRedo) return;
-        
-        // Кнопка "<-" активна только если есть хотя бы 1 поставленная точка
         btnUndo.disabled = (clicks.length === 0);
-        
-        // Кнопка "->" активна только если в памяти есть отмененные точки
         btnRedo.disabled = (redoStack.length === 0);
     }
 
@@ -943,110 +957,100 @@ document.addEventListener('keydown', (e) => {
         redoStack = []; 
         draw();
         checkResult();
-        updateButtonsState(); // Обновляем кнопки после клика
+        updateButtonsState();
     };
 
-    // Управление кнопками истории (добавлено обновление состояний)
-    btnUndo.onclick = () => { 
-        if(clicks.length > 0) { redoStack.push(clicks.pop()); draw(); checkResult(); updateButtonsState(); } 
-    };
-    btnRedo.onclick = () => { 
-        if(redoStack.length > 0) { clicks.push(redoStack.pop()); draw(); checkResult(); updateButtonsState(); } 
-    };
-    btnResetStep.onclick = () => { 
-        clicks = []; redoStack = []; draw(); checkResult(); updateButtonsState(); 
-    };
+    btnUndo.onclick = () => { if(clicks.length > 0) { redoStack.push(clicks.pop()); draw(); checkResult(); updateButtonsState(); } };
+    btnRedo.onclick = () => { if(redoStack.length > 0) { clicks.push(redoStack.pop()); draw(); checkResult(); updateButtonsState(); } };
+    btnResetStep.onclick = () => { clicks = []; redoStack = []; draw(); checkResult(); updateButtonsState(); };
 
     btnPrevStep.onclick = () => {
         if (currentStepIndex > 0) {
             currentStepIndex--;
-            if (activeQueue[currentStepIndex].id === 'a4') {
-                a4Zone.active = false;
-                scaleFactor = 0;
-            }
             updateUI();
         } else {
+            // Если отменяем первый шаг - возвращаемся к выбору калибровки
             document.getElementById('step-canvas').style.display = 'none';
-            document.getElementById('step-upload').style.display = 'block';
-            
-            fileInput.value = "";
+            document.getElementById('step-calib-choice').style.display = 'block';
         }
     };
 
-    btnSkip.onclick = () => { nextStep(); };
-    btnConfirm.onclick = () => { applyMeasurement(); nextStep(); };
+    btnSkip.onclick = () => { 
+        // Нельзя пропустить калибровку
+        if (currentStepIndex === 0) return;
+        applyMeasurement(true); 
+    };
+
+    btnConfirm.onclick = () => { applyMeasurement(false); };
 
     function checkResult() {
         const step = activeQueue[currentStepIndex];
         
-        // Если поставлены ВСЕ нужные точки
         if (clicks.length === step.count) {
-            
-            // 1. Показываем подвал с кнопками "Заново" и "Далее"
             if (scanFooter) scanFooter.style.visibility = 'visible';
             
             if (step.id === 'a4') {
-                // Для А4 текст не нужен
-                if (scanVal && scanVal.parentNode) {
-                    scanVal.parentNode.style.visibility = 'hidden';
+                if (scanValText) scanValText.style.display = 'none';
+                if (scanCustomContainer) scanCustomContainer.style.display = 'none';
+            } 
+            else if (step.id === 'custom_calib') {
+                if (scanValText) scanValText.style.display = 'none';
+                if (scanCustomContainer) {
+                    scanCustomContainer.style.display = 'flex';
+                    scanCustomInput.focus(); // Делаем фокус на поле ввода
                 }
-            } else {
-                // Считаем размер
+            } 
+            else {
+                if (scanCustomContainer) scanCustomContainer.style.display = 'none';
+                
                 const dist = Math.hypot(clicks[1].x - clicks[0].x, clicks[1].y - clicks[0].y);
                 const safeScale = (scaleFactor && scaleFactor > 0) ? scaleFactor : 1;
                 const valCm = (dist / safeScale) * 2;
                 
-                // Выводим размер и ПОКАЗЫВАЕМ текст
-                if (scanVal) {
-                    scanVal.innerText = Math.round(valCm);
-                    if (scanVal.parentNode) {
-                        scanVal.parentNode.style.visibility = 'visible';
-                    }
+                if (scanVal) scanVal.innerText = Math.round(valCm);
+                if (scanValText) scanValText.style.display = 'block';
+            }
+        } else {
+            if (scanFooter) scanFooter.style.visibility = 'hidden';
+            if (scanValText) scanValText.style.display = 'none';
+            if (scanCustomContainer) scanCustomContainer.style.display = 'none';
+        }
+    }
+
+    function applyMeasurement(isSkip = false) {
+        const step = activeQueue[currentStepIndex];
+        
+        if (!isSkip) {
+            if (step.id === 'a4') {
+                let maxDist = 0;
+                for (let i = 0; i < clicks.length; i++) {
+                    const p1 = clicks[i];
+                    const p2 = clicks[(i + 1) % clicks.length];
+                    const d = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+                    if (d > maxDist) maxDist = d;
+                }
+                scaleFactor = maxDist / 29.7;
+            } 
+            else if (step.id === 'custom_calib') {
+                const inputVal = parseFloat(scanCustomInput.value);
+                if (!inputVal || inputVal <= 0) {
+                    alert("Пожалуйста, введите корректный размер предмета (число больше 0).");
+                    return; // Прерываем функцию, не пускаем на следующий шаг!
+                }
+                const dist = Math.hypot(clicks[1].x - clicks[0].x, clicks[1].y - clicks[0].y);
+                scaleFactor = dist / inputVal;
+            } 
+            else {
+                const val = parseInt(scanVal.innerText);
+                if (inputs.cloth && inputs.cloth[step.id]) {
+                    const input = inputs.cloth[step.id].num;
+                    input.value = val;
+                    input.dispatchEvent(new Event('input'));
                 }
             }
-            
-        } else {
-            // Если точек МЕНЬШЕ нужного (в начале шага или если нажали "отмена")
-            // 1. Прячем кнопки
-            if (scanFooter) scanFooter.style.visibility = 'hidden';
-            
-            // 2. Прячем сам текст результата
-            if (scanVal && scanVal.parentNode) {
-                scanVal.parentNode.style.visibility = 'hidden';
-            }
         }
-    }
-
-    function applyMeasurement() {
-        const step = activeQueue[currentStepIndex];
-        if (step.id === 'a4') {
-            let maxDist = 0;
-            const xs = [], ys = [];
-            for (let i = 0; i < clicks.length; i++) {
-                const p1 = clicks[i];
-                const p2 = clicks[(i + 1) % clicks.length];
-                const d = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-                if (d > maxDist) maxDist = d;
-                xs.push(p1.x); ys.push(p1.y);
-            }
-            scaleFactor = maxDist / 29.7;
-            a4Zone = {
-                minX: Math.min(...xs), maxX: Math.max(...xs),
-                minY: Math.min(...ys), maxY: Math.max(...ys),
-                active: true
-            };
-        } 
-        else {
-            const val = parseInt(scanVal.innerText);
-            if (inputs.cloth && inputs.cloth[step.id]) {
-                const input = inputs.cloth[step.id].num;
-                input.value = val;
-                input.dispatchEvent(new Event('input'));
-            }
-        }
-    }
-
-    function nextStep() {
+        
+        // Переход на следующий шаг (если не было ошибки валидации)
         currentStepIndex++;
         if (currentStepIndex >= activeQueue.length) {
             showSuccess({ title: 'Готово! Данные перенесены.' });
@@ -1061,20 +1065,25 @@ document.addEventListener('keydown', (e) => {
         redoStack = []; 
         draw();
         
-        // Прячем и кнопки, и текст в начале каждого шага
         if (scanFooter) scanFooter.style.visibility = 'hidden';
-        if (scanVal && scanVal.parentNode) scanVal.parentNode.style.visibility = 'hidden';
+        if (scanValText) scanValText.style.display = 'none';
+        if (scanCustomContainer) scanCustomContainer.style.display = 'none';
+        if (scanCustomInput) scanCustomInput.value = ''; // Очищаем поле ввода
         
-        updateButtonsState(); // Обнуляем кнопки
+        updateButtonsState();
         
         const step = activeQueue[currentStepIndex];
         
         if (step.id === 'a4') {
-            instrBadge.innerText = "📌 Нажмите на 4 угла листа А4 на фото";
+            instrBadge.innerText = "Нажмите на 4 угла листа А4 на фото";
             btnSkip.style.display = 'none';
-            btnPrevStep.innerText = "К загрузке"; 
+            btnPrevStep.innerText = "Выбрать другой метод измерения"; 
+        } else if (step.id === 'custom_calib') {
+            instrBadge.innerText = "Отметьте 2 края вашего предмета";
+            btnSkip.style.display = 'none';
+            btnPrevStep.innerText = "Выбрать другой метод измерения";
         } else {
-            instrBadge.innerText = `📌 Двумя нажатиями определите ${step.name}`;
+            instrBadge.innerText = `Двумя нажатиями определите ${step.name}`;
             btnSkip.style.display = 'inline-flex';
             btnPrevStep.innerText = "Назад";
         }
@@ -1082,6 +1091,7 @@ document.addEventListener('keydown', (e) => {
         instrBadge.style.borderLeftColor = step.color;
     }
 })();
+
 
 
 
@@ -1452,7 +1462,7 @@ document.addEventListener('keydown', (e) => {
             const detector = await ensurePoseLandmarker();
             if (loadingText) loadingText.textContent = 'Распознаём позу спереди...';
             if (!detector) {
-                if (instr) instr.innerText = '📌 Загрузите фото и нажмите кнопку';
+                if (instr) instr.innerText = 'Загрузите фото и нажмите кнопку';
                 summaryEl.textContent = "Не удалось загрузить MediaPipe Pose. Проверьте интернет и консоль (F12).";
                 isProcessing = false;
                 if (loadingOverlay) loadingOverlay.classList.remove('active');
@@ -1461,7 +1471,7 @@ document.addEventListener('keydown', (e) => {
             summaryEl.textContent = `Распознаём позу спереди (${DETECT_PASSES} прохода)...`;
             const pose = await detectPoseMedian(detector, img, DETECT_PASSES);
             if (!pose || pose.length === 0) {
-                if (instr) instr.innerText = '📌 Загрузите фото и нажмите кнопку';
+                if (instr) instr.innerText = 'Загрузите фото и нажмите кнопку';
                 summaryEl.textContent = "Поза не найдена. Попробуйте другое фото (человек в полный рост, фронтально).";
                 isProcessing = false;
                 if (loadingOverlay) loadingOverlay.classList.remove('active');
@@ -1490,7 +1500,7 @@ document.addEventListener('keydown', (e) => {
                 technical: err && err.message ? err.message : String(err || ''),
             });
             if (document.getElementById('body-scan-instruction')) {
-                document.getElementById('body-scan-instruction').innerText = '📌 Загрузите фото и нажмите кнопку';
+                document.getElementById('body-scan-instruction').innerText = 'Загрузите фото и нажмите кнопку';
             }
             summaryEl.textContent = "Ошибка анализа: " + (err.message || "неизвестная ошибка");
         } finally {
