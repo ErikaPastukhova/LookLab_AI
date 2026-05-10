@@ -1022,14 +1022,17 @@ document.addEventListener('keydown', (e) => {
         
         if (!isSkip) {
             if (step.id === 'a4') {
-                let maxDist = 0;
+                let distances = [];
                 for (let i = 0; i < clicks.length; i++) {
-                    const p1 = clicks[i];
-                    const p2 = clicks[(i + 1) % clicks.length];
-                    const d = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-                    if (d > maxDist) maxDist = d;
+                    for (let j = i + 1; j < clicks.length; j++) {
+                        const p1 = clicks[i];
+                        const p2 = clicks[j];
+                        const d = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+                        distances.push(d)
+                    }
                 }
-                scaleFactor = maxDist / 29.7;
+                distances.sort((a, b) => a - b);
+                scaleFactor = distances[2] / 29.7;
             } 
             else if (step.id === 'custom_calib') {
                 const inputVal = parseFloat(scanCustomInput.value);
