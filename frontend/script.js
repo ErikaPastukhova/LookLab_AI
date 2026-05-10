@@ -1032,7 +1032,7 @@ document.addEventListener('keydown', (e) => {
                     }
                 }
                 distances.sort((a, b) => a - b);
-                scaleFactor = distances[2] / 29.7;
+                scaleFactor = ((distances[2] + distances[3]) / 2) / 29.7;
             } 
             else if (step.id === 'custom_calib') {
                 const inputVal = parseFloat(scanCustomInput.value);
