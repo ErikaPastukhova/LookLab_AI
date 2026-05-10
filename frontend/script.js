@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { installGlobalErrorHandlers, showError, showNotice, showSuccess, normalizeNetworkError } from './ui/messages.js';
-import { analyzeBodyScan, getScanProfile as buildBodyScanProfile } from './body-scan/bodyScanCore.js';
+import { analyzeBodyScan, getScanProfile as buildBodyScanProfile, normalizeBinaryMask } from './body-scan/bodyScanCore.js';
 
 installGlobalErrorHandlers();
 
@@ -1148,22 +1148,46 @@ document.addEventListener('keydown', (e) => {
 
     let img = new Image();
     let imgSide = new Image();
+    let visionTasksModule = null;
+    let visionFileset = null;
     let poseLandmarker = null;
+    let imageSegmenter = null;
+    let imageSegmenterUnavailable = false;
+    let bodyPartSegmenter = null;
+    let bodyPartSegmenterUnavailable = false;
+    const externalScriptPromises = new Map();
     let isProcessing = false;
     let lastLandmarks = null;
     let lastLandmarksSide = null;
+    let lastFrontMask = null;
+    let lastFrontTorsoMask = null;
+    let lastSideMask = null;
     let lastRawValues = {};
     let lastHipsEstimate = null;
+    let lastBodyScanResult = null;
+
+    async function loadVisionTasks() {
+        if (visionTasksModule) return visionTasksModule;
+        visionTasksModule = await import(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.10/vision_bundle.mjs"
+        );
+        return visionTasksModule;
+    }
+
+    async function ensureVisionFileset() {
+        if (visionFileset) return visionFileset;
+        const { FilesetResolver } = await loadVisionTasks();
+        visionFileset = await FilesetResolver.forVisionTasks(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.10/wasm"
+        );
+        return visionFileset;
+    }
 
     async function ensurePoseLandmarker() {
         if (poseLandmarker) return poseLandmarker;
         try {
-            const { FilesetResolver, PoseLandmarker: PoseLandmarkerClass } = await import(
-                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.10/vision_bundle.mjs"
-            );
-            const vision = await FilesetResolver.forVisionTasks(
-                "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.10/wasm"
-            );
+            const { PoseLandmarker: PoseLandmarkerClass } = await loadVisionTasks();
+            const vision = await ensureVisionFileset();
             poseLandmarker = await PoseLandmarkerClass.createFromOptions(vision, {
                 baseOptions: {
                     modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task"
@@ -1184,6 +1208,74 @@ document.addEventListener('keydown', (e) => {
                 ],
                 technical: n.technical,
             });
+            return null;
+        }
+    }
+
+    async function ensureImageSegmenter() {
+        if (imageSegmenter) return imageSegmenter;
+        if (imageSegmenterUnavailable) return null;
+        try {
+            const { ImageSegmenter } = await loadVisionTasks();
+            const vision = await ensureVisionFileset();
+            imageSegmenter = await ImageSegmenter.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: "https://storage.googleapis.com/mediapipe-assets/deeplabv3.tflite?generation=1661875711618421"
+                },
+                runningMode: "IMAGE",
+                outputCategoryMask: true,
+                outputConfidenceMasks: false,
+            });
+            return imageSegmenter;
+        } catch (err) {
+            imageSegmenterUnavailable = true;
+            console.warn('Person segmentation is unavailable; using color-threshold mask fallback.', err);
+            return null;
+        }
+    }
+
+    function loadExternalScriptOnce(src) {
+        if (externalScriptPromises.has(src)) return externalScriptPromises.get(src);
+        const promise = new Promise((resolve, reject) => {
+            const existing = document.querySelector(`script[src="${src}"]`);
+            if (existing) {
+                existing.addEventListener('load', () => resolve(), { once: true });
+                existing.addEventListener('error', () => reject(new Error(`Failed to load ${src}`)), { once: true });
+                if (existing.dataset.loaded === 'true') resolve();
+                return;
+            }
+            const script = document.createElement('script');
+            script.src = src;
+            script.async = true;
+            script.onload = () => {
+                script.dataset.loaded = 'true';
+                resolve();
+            };
+            script.onerror = () => reject(new Error(`Failed to load ${src}`));
+            document.head.appendChild(script);
+        });
+        externalScriptPromises.set(src, promise);
+        return promise;
+    }
+
+    async function ensureBodyPartSegmenter() {
+        if (bodyPartSegmenter) return bodyPartSegmenter;
+        if (bodyPartSegmenterUnavailable) return null;
+        try {
+            await loadExternalScriptOnce('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js');
+            await loadExternalScriptOnce('https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.2.0/dist/body-pix.min.js');
+            if (!window.bodyPix) throw new Error('BodyPix global was not initialized.');
+            if (window.tf?.ready) await window.tf.ready();
+            bodyPartSegmenter = await window.bodyPix.load({
+                architecture: 'MobileNetV1',
+                outputStride: 16,
+                multiplier: 0.75,
+                quantBytes: 2,
+            });
+            return bodyPartSegmenter;
+        } catch (err) {
+            bodyPartSegmenterUnavailable = true;
+            console.warn('Body-part segmentation is unavailable; using pose-aware torso mask fallback.', err);
             return null;
         }
     }
@@ -1220,8 +1312,12 @@ document.addEventListener('keydown', (e) => {
         if (toolbar) toolbar.style.display = 'none';
         lastLandmarks = null;
         lastLandmarksSide = null;
+        lastFrontMask = null;
+        lastFrontTorsoMask = null;
+        lastSideMask = null;
         lastRawValues = {};
         lastHipsEstimate = null;
+        lastBodyScanResult = null;
         img.src = '';
         imgSide.src = '';
         if (heightInput) heightInput.value = inputs.body.height.num.value || "175";
@@ -1337,6 +1433,14 @@ document.addEventListener('keydown', (e) => {
     fileInput.onchange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
+        lastLandmarks = null;
+        lastLandmarksSide = null;
+        lastFrontMask = null;
+        lastFrontTorsoMask = null;
+        lastSideMask = null;
+        lastRawValues = {};
+        lastHipsEstimate = null;
+        lastBodyScanResult = null;
         const reader = new FileReader();
         reader.onload = (evt) => {
             img.onload = () => {
@@ -1350,6 +1454,8 @@ document.addEventListener('keydown', (e) => {
     function onSidePhotoSelected(e) {
         const file = e.target.files[0];
         if (!file) return;
+        lastLandmarksSide = null;
+        lastSideMask = null;
         const reader = new FileReader();
         reader.onload = (evt) => {
             imgSide.onload = () => drawBodyImage();
@@ -1508,6 +1614,23 @@ document.addEventListener('keydown', (e) => {
                 const poseSide = await detectPoseMedian(detector, imgSide, DETECT_PASSES);
                 if (poseSide && poseSide.length > 0) lastLandmarksSide = poseSide;
             }
+            const maskAnchor = (pose, targetCanvas) => {
+                const pts = [pose?.[11], pose?.[12], pose?.[23], pose?.[24]].filter(Boolean);
+                if (!pts.length || !targetCanvas) return { x: targetCanvas ? targetCanvas.width * 0.5 : 0, y: targetCanvas ? targetCanvas.height * 0.5 : 0 };
+                return {
+                    x: pts.reduce((sum, p) => sum + p.x, 0) / pts.length * targetCanvas.width,
+                    y: pts.reduce((sum, p) => sum + p.y, 0) / pts.length * targetCanvas.height,
+                };
+            };
+            if (loadingText) loadingText.textContent = 'Сегментируем силуэт...';
+            summaryEl.textContent = "Сегментируем силуэт...";
+            lastFrontMask = await buildPersonMaskForCanvas(canvas, maskAnchor(lastLandmarks, canvas));
+            if (loadingText) loadingText.textContent = 'Сегментируем части тела...';
+            summaryEl.textContent = "Сегментируем части тела...";
+            lastFrontTorsoMask = await buildBodyPartTorsoMaskForCanvas(canvas, maskAnchor(lastLandmarks, canvas));
+            lastSideMask = lastLandmarksSide && canvasSide && canvasSide.width > 0
+                ? await buildPersonMaskForCanvas(canvasSide, maskAnchor(lastLandmarksSide, canvasSide))
+                : null;
             if (document.getElementById('body-scan-instruction')) {
                 document.getElementById('body-scan-instruction').innerText = '✅ Параметры вычислены';
             }
@@ -1612,6 +1735,128 @@ document.addEventListener('keydown', (e) => {
             return aggregateLandmarksMedian(candidates);
         } finally {
             imageBitmap.close();
+        }
+    }
+
+    function getSegmentLabelText(label) {
+        if (typeof label === 'string') return label;
+        return label?.displayName || label?.categoryName || label?.name || '';
+    }
+
+    function resolvePersonCategoryIndex(segmenter) {
+        const labels = typeof segmenter.getLabels === 'function' ? segmenter.getLabels() : [];
+        const idx = labels.findIndex((label) => /person|human/i.test(getSegmentLabelText(label)));
+        return idx >= 0 ? idx : 15; // DeepLabV3 PASCAL VOC person category.
+    }
+
+    function runImageSegmentation(segmenter, sourceCanvas) {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error('Image segmentation timeout')), 15000);
+            const finish = (result) => {
+                clearTimeout(timer);
+                resolve(result);
+            };
+            try {
+                const maybeResult = segmenter.segment(sourceCanvas, (result) => finish(result));
+                if (maybeResult && typeof maybeResult.then === 'function') {
+                    maybeResult.then(finish, (err) => {
+                        clearTimeout(timer);
+                        reject(err);
+                    });
+                } else if (maybeResult && (maybeResult.categoryMask || maybeResult.confidenceMasks)) {
+                    finish(maybeResult);
+                }
+            } catch (err) {
+                clearTimeout(timer);
+                reject(err);
+            }
+        });
+    }
+
+    async function buildPersonMaskForCanvas(sourceCanvas, anchor) {
+        const segmenter = await ensureImageSegmenter();
+        if (!segmenter || !sourceCanvas || sourceCanvas.width <= 0 || sourceCanvas.height <= 0) return null;
+
+        let result = null;
+        let categoryMask = null;
+        try {
+            result = await runImageSegmentation(segmenter, sourceCanvas);
+            categoryMask = result?.categoryMask;
+            if (!categoryMask) return null;
+
+            const raw = typeof categoryMask.getAsUint8Array === 'function'
+                ? categoryMask.getAsUint8Array()
+                : (typeof categoryMask.getAsFloat32Array === 'function' ? categoryMask.getAsFloat32Array() : null);
+            if (!raw || raw.length === 0) return null;
+
+            const targetW = sourceCanvas.width;
+            const targetH = sourceCanvas.height;
+            const maskW = categoryMask.width || targetW;
+            const maskH = categoryMask.height || targetH;
+            const personIndex = resolvePersonCategoryIndex(segmenter);
+            const binary = new Uint8Array(targetW * targetH);
+
+            for (let y = 0; y < targetH; y++) {
+                const sy = Math.min(maskH - 1, Math.floor((y / Math.max(1, targetH)) * maskH));
+                for (let x = 0; x < targetW; x++) {
+                    const sx = Math.min(maskW - 1, Math.floor((x / Math.max(1, targetW)) * maskW));
+                    const rawValue = raw[sy * maskW + sx];
+                    const category = Number.isInteger(rawValue) ? rawValue : Math.round(rawValue);
+                    if (category === personIndex) binary[y * targetW + x] = 1;
+                }
+            }
+
+            const normalized = normalizeBinaryMask(binary, targetW, targetH, anchor, { smooth: true });
+            if (!normalized || normalized.areaRatio < 0.015) return null;
+            return { ...normalized, source: 'imageSegmenter' };
+        } catch (err) {
+            console.warn('Person segmentation failed; using color-threshold fallback.', err);
+            return null;
+        } finally {
+            try {
+                categoryMask?.close?.();
+                result?.confidenceMasks?.forEach?.((mask) => mask.close?.());
+            } catch {
+                // MPMask cleanup is best-effort across tasks-vision versions.
+            }
+        }
+    }
+
+    async function buildBodyPartTorsoMaskForCanvas(sourceCanvas, anchor) {
+        const segmenter = await ensureBodyPartSegmenter();
+        if (!segmenter || !sourceCanvas || sourceCanvas.width <= 0 || sourceCanvas.height <= 0) return null;
+        try {
+            const segmentation = await segmenter.segmentPersonParts(sourceCanvas, {
+                flipHorizontal: false,
+                internalResolution: 'medium',
+                segmentationThreshold: 0.7,
+                maxDetections: 1,
+            });
+            const raw = segmentation?.data;
+            const maskW = segmentation?.width || sourceCanvas.width;
+            const maskH = segmentation?.height || sourceCanvas.height;
+            if (!raw || !maskW || !maskH) return null;
+
+            const targetW = sourceCanvas.width;
+            const targetH = sourceCanvas.height;
+            // BodyPix part ids: torso front/back and upper-leg front/back. Arms, face, lower legs and feet stay out.
+            const torsoAndHipParts = new Set([2, 4, 6, 7, 12, 13]);
+            const binary = new Uint8Array(targetW * targetH);
+            for (let y = 0; y < targetH; y++) {
+                const sy = Math.min(maskH - 1, Math.floor((y / Math.max(1, targetH)) * maskH));
+                for (let x = 0; x < targetW; x++) {
+                    const sx = Math.min(maskW - 1, Math.floor((x / Math.max(1, targetW)) * maskW));
+                    const part = raw[sy * maskW + sx];
+                    if (torsoAndHipParts.has(part)) binary[y * targetW + x] = 1;
+                }
+            }
+
+            const normalized = normalizeBinaryMask(binary, targetW, targetH, anchor, { smooth: true });
+            if (!normalized || normalized.areaRatio < 0.012) return null;
+            return { ...normalized, source: 'bodyPixParts' };
+        } catch (err) {
+            console.warn('Body-part segmentation failed; using pose-aware torso mask fallback.', err);
+            return null;
         }
     }
 
@@ -2055,6 +2300,12 @@ document.addEventListener('keydown', (e) => {
         drawScanLine(ctx, overlay.chestY, overlay.chestSpan ? overlay.chestSpan.x1 : null, overlay.chestSpan ? overlay.chestSpan.x2 : null, conf.chest, 'Грудь');
         drawScanLine(ctx, overlay.waistY, overlay.waistSpan ? overlay.waistSpan.x1 : null, overlay.waistSpan ? overlay.waistSpan.x2 : null, conf.waist, 'Талия');
         drawScanLine(ctx, overlay.hipsY, overlay.hipsSpan ? overlay.hipsSpan.x1 : null, overlay.hipsSpan ? overlay.hipsSpan.x2 : null, conf.hips, 'Бёдра');
+        if (new URLSearchParams(window.location.search).has('debugBodyScan') && ctxSide && canvasSide && canvasSide.width > 0) {
+            const side = overlay.sideSpans || {};
+            if (side.chest) drawScanLine(ctxSide, side.chest.y, side.chest.x1, side.chest.x2, conf.chest, 'Глубина груди');
+            if (side.waist) drawScanLine(ctxSide, side.waist.y, side.waist.x1, side.waist.x2, conf.waist, 'Глубина талии');
+            if (side.hips) drawScanLine(ctxSide, side.hips.y, side.hips.x1, side.hips.x2, conf.hips, 'Глубина бедер');
+        }
     }
 
     function buildTorsoProfile(frontMask, leftShoulder, rightShoulder, leftHip, rightHip, yStart, yEnd, section = 'torso') {
@@ -2230,13 +2481,20 @@ document.addEventListener('keydown', (e) => {
         const result = analyzeBodyScan({
             frontCanvas: canvas,
             frontCtx: ctx,
+            frontMask: lastFrontMask,
+            frontMaskSource: lastFrontMask?.source || null,
+            frontTorsoMask: lastFrontTorsoMask,
+            frontTorsoMaskSource: lastFrontTorsoMask?.source || null,
             sideCanvas: canvasSide,
             sideCtx: ctxSide,
+            sideMask: lastSideMask,
+            sideMaskSource: lastSideMask?.source || null,
             landmarks,
             landmarksSide,
             profile: getScanProfile(),
             previousHipsEstimate: lastHipsEstimate,
         });
+        lastBodyScanResult = result;
 
         if (new URLSearchParams(window.location.search).has('debugBodyScan')) {
             window.__lastBodyScanResult = result;
@@ -2286,8 +2544,11 @@ document.addEventListener('keydown', (e) => {
         };
         const missingParts = Object.keys(labels).filter((key) => !parts.includes(key));
         const messages = [];
-        if (!landmarksSide) {
+        const sideInfo = result.diagnostics?.side;
+        if (!sideInfo?.usable) {
             messages.push('Фронтальный режим: без фото сбоку глубина тела оценена приблизительно. Проверьте значения перед применением.');
+        } else if (sideInfo?.usable) {
+            messages.push('Фото сбоку использовано для оценки глубины тела.');
         }
         if (result.warnings?.length) messages.push(...result.warnings);
         if (missingParts.length > 0) {
