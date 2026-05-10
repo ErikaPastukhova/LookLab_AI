@@ -140,6 +140,56 @@ export function detectArmTorsoRisk(landmarks) {
     return { risk: closeCount >= 2 ? 'high' : closeCount === 1 ? 'medium' : 'low', warnings };
 }
 
+export function validateSidePoseLandmarks(landmarks, { minCoreConfidence = 0.22 } = {}) {
+    const required = [
+        ['leftShoulder', 11],
+        ['rightShoulder', 12],
+        ['leftHip', 23],
+        ['rightHip', 24],
+    ];
+    const points = {};
+    const warnings = [];
+    const errors = [];
+
+    for (const [name, index] of required) {
+        const point = getPoint(landmarks, index);
+        points[name] = point;
+        if (!point) {
+            errors.push(`На фото сбоку не найдена ключевая точка: ${name}.`);
+            continue;
+        }
+        const conf = pointConfidence(point);
+        if (conf < minCoreConfidence) warnings.push(`Низкая уверенность MediaPipe на фото сбоку для ${name}: ${Math.round(conf * 100)}%.`);
+    }
+
+    if (errors.length) return { ok: false, points, errors, warnings, metrics: {} };
+
+    const shoulderY = (points.leftShoulder.y + points.rightShoulder.y) / 2;
+    const hipY = (points.leftHip.y + points.rightHip.y) / 2;
+    const torsoDelta = hipY - shoulderY;
+    if (torsoDelta <= 0.08) errors.push('Фото сбоку не похоже на полный рост: плечи и бедра слишком близко по вертикали.');
+
+    const shoulderWidth = Math.abs(points.rightShoulder.x - points.leftShoulder.x);
+    const hipWidth = Math.abs(points.rightHip.x - points.leftHip.x);
+    if (shoulderWidth > 0.26 || hipWidth > 0.22) {
+        errors.push('Фото сбоку похоже на фронтальный ракурс: плечи/бедра слишком широко разведены по X.');
+    } else if (shoulderWidth > 0.20 || hipWidth > 0.17) {
+        warnings.push('Фото сбоку не строго профильное: глубина может быть завышена.');
+    }
+
+    const shoulderTilt = Math.abs(points.leftShoulder.y - points.rightShoulder.y);
+    const hipTilt = Math.abs(points.leftHip.y - points.rightHip.y);
+    if (shoulderTilt > 0.10 || hipTilt > 0.10) warnings.push('Фото сбоку заметно наклонено: глубина может быть неточной.');
+
+    return {
+        ok: errors.length === 0,
+        points,
+        errors,
+        warnings,
+        metrics: { shoulderY, hipY, torsoDelta, shoulderWidth, hipWidth, shoulderTilt, hipTilt },
+    };
+}
+
 function colorDistanceSq(r1, g1, b1, r2, g2, b2) {
     const dr = r1 - r2;
     const dg = g1 - g2;
@@ -218,6 +268,14 @@ export function buildForegroundMaskFromImageData(data, w, h, anchor) {
 
     const smoothed = dilate(dilate(rawMask, w, h, 3), w, h, 4);
     return keepBestComponent(smoothed, w, h, anchor);
+}
+
+export function normalizeBinaryMask(binaryMask, w, h, anchor, { smooth = true } = {}) {
+    if (!binaryMask || !w || !h || binaryMask.length < w * h) return null;
+    const raw = new Uint8Array(w * h);
+    for (let i = 0; i < raw.length; i++) raw[i] = binaryMask[i] ? 1 : 0;
+    const prepared = smooth ? dilate(dilate(raw, w, h, 3), w, h, 4) : raw;
+    return keepBestComponent(prepared, w, h, anchor);
 }
 
 function keepBestComponent(src, w, h, anchor) {
@@ -413,6 +471,181 @@ export function getSpanByCenterCrossing(maskObj, y, expectedCenterX, searchRadiu
     return best;
 }
 
+function pointToSegmentDistancePx(x, y, a, b, width, height) {
+    if (!a || !b) return Infinity;
+    const ax = a.x * width;
+    const ay = a.y * height;
+    const bx = b.x * width;
+    const by = b.y * height;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq <= 1) return Math.hypot(x - ax, y - ay);
+    const t = clampValue(((x - ax) * dx + (y - ay) * dy) / lenSq, 0, 1);
+    const px = ax + dx * t;
+    const py = ay + dy * t;
+    return Math.hypot(x - px, y - py);
+}
+
+function minDistanceToSegmentsPx(x, y, segments, width, height) {
+    let best = Infinity;
+    for (const [a, b] of segments) {
+        const dist = pointToSegmentDistancePx(x, y, a, b, width, height);
+        if (dist < best) best = dist;
+    }
+    return best;
+}
+
+function makeSegments(...points) {
+    const segments = [];
+    for (let i = 0; i < points.length - 1; i++) {
+        if (points[i] && points[i + 1]) segments.push([points[i], points[i + 1]]);
+    }
+    return segments;
+}
+
+function buildPoseAwareTorsoMask(personMask, landmarks, anchor) {
+    const fallback = (reason) => ({
+        mask: personMask,
+        diagnostics: {
+            source: personMask?.source || 'personMask',
+            fallbackReason: reason,
+            personAreaRatio: personMask?.areaRatio || 0,
+            torsoAreaRatio: personMask?.areaRatio || 0,
+            removedPixelRatio: 0,
+        },
+    });
+
+    if (!personMask || !personMask.mask || !landmarks) return fallback('missing-mask-or-landmarks');
+    const leftShoulder = getPoint(landmarks, 11);
+    const rightShoulder = getPoint(landmarks, 12);
+    const leftHip = getPoint(landmarks, 23);
+    const rightHip = getPoint(landmarks, 24);
+    const leftElbow = getPoint(landmarks, 13);
+    const rightElbow = getPoint(landmarks, 14);
+    const leftWrist = getPoint(landmarks, 15);
+    const rightWrist = getPoint(landmarks, 16);
+    if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) return fallback('missing-core-points');
+
+    const { width, height } = personMask;
+    const shoulderY = ((leftShoulder.y + rightShoulder.y) / 2) * height;
+    const hipY = ((leftHip.y + rightHip.y) / 2) * height;
+    const torsoDelta = hipY - shoulderY;
+    if (!isFinite(torsoDelta) || torsoDelta <= height * 0.08) return fallback('invalid-torso-geometry');
+
+    const leftShoulderX = leftShoulder.x * width;
+    const rightShoulderX = rightShoulder.x * width;
+    const leftHipX = leftHip.x * width;
+    const rightHipX = rightHip.x * width;
+    const shoulderWidthPx = Math.abs(rightShoulderX - leftShoulderX);
+    const hipWidthPx = Math.abs(rightHipX - leftHipX);
+    const refWidth = Math.max(12, shoulderWidthPx, hipWidthPx * 1.15);
+    const armSegments = [
+        ...makeSegments(leftShoulder, leftElbow, leftWrist),
+        ...makeSegments(rightShoulder, rightElbow, rightWrist),
+    ];
+    const armRadius = clampValue(refWidth * 0.105, 7, 24);
+    const torsoBinary = new Uint8Array(width * height);
+    let personPixels = 0;
+    let keptPixels = 0;
+    let removedByCorridor = 0;
+    let removedByArm = 0;
+
+    const padForT = (tRaw) => {
+        if (tRaw < 0.16) return refWidth * 0.06 + 3;
+        if (tRaw < 0.42) return refWidth * 0.09 + 3;
+        if (tRaw < 0.72) return refWidth * 0.07 + 2;
+        if (tRaw < 1.04) return refWidth * 0.19 + 4;
+        return refWidth * 0.11 + 2;
+    };
+
+    for (let y = 0; y < height; y++) {
+        const tRaw = (y - shoulderY) / torsoDelta;
+        const t = clampValue(tRaw, 0, 1);
+        const leftAxisX = leftShoulderX + (leftHipX - leftShoulderX) * t;
+        const rightAxisX = rightShoulderX + (rightHipX - rightShoulderX) * t;
+        const innerLeft = Math.min(leftAxisX, rightAxisX);
+        const innerRight = Math.max(leftAxisX, rightAxisX);
+        const pad = padForT(tRaw);
+        const outerLeft = innerLeft - pad;
+        const outerRight = innerRight + pad;
+        const innerPad = Math.max(2, pad * 0.25);
+
+        for (let x = 0; x < width; x++) {
+            const idx = y * width + x;
+            if (personMask.mask[idx] !== 1) continue;
+            personPixels++;
+            if (tRaw < -0.08 || tRaw > 1.24 || x < outerLeft || x > outerRight) {
+                removedByCorridor++;
+                continue;
+            }
+
+            const armDist = armSegments.length
+                ? minDistanceToSegmentsPx(x, y, armSegments, width, height)
+                : Infinity;
+            const insideInnerTorso = x >= innerLeft - innerPad && x <= innerRight + innerPad;
+            const shoulderBridge = tRaw < 0.14 && Math.abs(y - shoulderY) < Math.max(6, torsoDelta * 0.08);
+            if (armDist <= armRadius && !insideInnerTorso && !shoulderBridge) {
+                removedByArm++;
+                continue;
+            }
+
+            torsoBinary[idx] = 1;
+            keptPixels++;
+        }
+    }
+
+    const normalized = normalizeBinaryMask(torsoBinary, width, height, anchor, { smooth: false });
+    const minArea = Math.max(personPixels * 0.10, width * height * 0.01);
+    if (!normalized || keptPixels < minArea || normalized.areaRatio < personMask.areaRatio * 0.10) {
+        return fallback('pose-part-mask-too-small');
+    }
+
+    return {
+        mask: {
+            ...normalized,
+            source: personMask.source ? `${personMask.source}+poseParts` : 'poseParts',
+        },
+        diagnostics: {
+            source: personMask.source ? `${personMask.source}+poseParts` : 'poseParts',
+            fallbackReason: null,
+            personAreaRatio: personMask.areaRatio || (personPixels / Math.max(1, width * height)),
+            torsoAreaRatio: normalized.areaRatio,
+            removedPixelRatio: (removedByCorridor + removedByArm) / Math.max(1, personPixels),
+            removedByArmRatio: removedByArm / Math.max(1, personPixels),
+            removedByCorridorRatio: removedByCorridor / Math.max(1, personPixels),
+            armRadius,
+        },
+    };
+}
+
+function buildExternalTorsoSegmentation(personMask, externalMask, source = null) {
+    if (!personMask || !personMask.mask || !externalMask || !externalMask.mask) return null;
+    if (personMask.width !== externalMask.width || personMask.height !== externalMask.height) return null;
+    const personBounds = getMaskVerticalBounds(personMask);
+    const externalBounds = getMaskVerticalBounds(externalMask);
+    if (!personBounds || !externalBounds) return null;
+    if (externalBounds.height < personBounds.height * 0.22) return null;
+    const minAreaRatio = Math.max(0.012, personMask.areaRatio * 0.18);
+    if (!externalMask.areaRatio || externalMask.areaRatio < minAreaRatio) return null;
+    return {
+        mask: {
+            ...externalMask,
+            source: source || externalMask.source || 'bodyPartSegmentation',
+        },
+        diagnostics: {
+            source: source || externalMask.source || 'bodyPartSegmentation',
+            fallbackReason: null,
+            personAreaRatio: personMask.areaRatio || 0,
+            torsoAreaRatio: externalMask.areaRatio,
+            removedPixelRatio: 1 - (externalMask.areaRatio / Math.max(personMask.areaRatio || 0, 0.0001)),
+            removedByArmRatio: null,
+            removedByCorridorRatio: null,
+            external: true,
+        },
+    };
+}
+
 function getFrontTorsoSpanAtY(frontMask, y, leftShoulder, rightShoulder, leftHip, rightHip, section = 'torso') {
     if (!frontMask) return null;
     const h = frontMask.height;
@@ -466,7 +699,7 @@ function getFrontTorsoSpanAtY(frontMask, y, leftShoulder, rightShoulder, leftHip
     const maxCenterDeviation = Math.max(8, expectedWidth * (isHips ? 0.30 : 0.22));
     if (centerDeviation > maxCenterDeviation) return null;
 
-    const minWidthFactor = isHips ? 0.36 : 0.4;
+    const minWidthFactor = isHips ? 0.36 : isChest ? 0.4 : 0.30;
     const maxWidthFactor = isHips ? 1.26 : isChest ? 1.04 : 1.12;
     if (span.len < expectedWidth * minWidthFactor || span.len > expectedWidth * maxWidthFactor) return null;
     const corridorPad = isHips ? 14 : 6;
@@ -562,8 +795,8 @@ function findWaistSpanByTorsoMask(frontMask, leftShoulder, rightShoulder, leftHi
 
     const shoulderWidthPx = Math.abs((rightShoulder.x - leftShoulder.x) * w);
     const hipsWidthPx = Math.abs((rightHip.x - leftHip.x) * w);
-    const minAllowed = Math.max(10, Math.floor(Math.min(shoulderWidthPx, hipsWidthPx) * 0.38));
-    const maxAllowed = Math.max(minAllowed + 1, Math.ceil(Math.max(shoulderWidthPx, hipsWidthPx) * 1.10));
+    const minAllowed = Math.max(8, Math.floor(Math.min(shoulderWidthPx, hipsWidthPx) * 0.30));
+    const maxAllowed = Math.max(minAllowed + 1, Math.ceil(Math.max(shoulderWidthPx, hipsWidthPx) * 1.16));
     const shoulderCenterX = ((leftShoulder.x + rightShoulder.x) / 2) * w;
     const hipCenterX = ((leftHip.x + rightHip.x) / 2) * w;
     const leftShoulderX = leftShoulder.x * w;
@@ -575,13 +808,13 @@ function findWaistSpanByTorsoMask(frontMask, leftShoulder, rightShoulder, leftHi
     for (let y = scanStart; y <= scanEnd; y += 2) {
         const t = (y - shoulderY) / Math.max(1, (hipY - shoulderY));
         const expectedCenterX = shoulderCenterX + (hipCenterX - shoulderCenterX) * t;
-        const span = getSpanByCenterCrossing(frontMask, y, expectedCenterX, 1);
+        const span = getSpanByCenterCrossing(frontMask, y, expectedCenterX, 2, true);
         if (!span) continue;
         const leftTorsoX = leftShoulderX + (leftHipX - leftShoulderX) * t;
         const rightTorsoX = rightShoulderX + (rightHipX - rightShoulderX) * t;
         const expectedWidth = Math.abs(rightTorsoX - leftTorsoX);
-        const dynamicMinAllowed = Math.max(minAllowed, Math.floor(expectedWidth * 0.42));
-        const dynamicMaxAllowed = Math.min(maxAllowed, Math.ceil(expectedWidth * 1.06));
+        const dynamicMinAllowed = Math.max(minAllowed, Math.floor(expectedWidth * 0.30));
+        const dynamicMaxAllowed = Math.min(maxAllowed, Math.ceil(expectedWidth * 1.14));
         if (span.len < dynamicMinAllowed || span.len > dynamicMaxAllowed) continue;
         const spanCenter = (span.x1 + span.x2) / 2;
         const maxCenterDeviation = Math.max(8, expectedWidth * 0.22);
@@ -592,7 +825,7 @@ function findWaistSpanByTorsoMask(frontMask, leftShoulder, rightShoulder, leftHi
         span.confidence = 0.45 * centerScore + 0.55 * widthScore;
         samples.push(span);
     }
-    if (samples.length < 3) return null;
+    if (samples.length < 2) return null;
 
     const medianSmoothed = samples.map((sample, idx) => {
         const lengths = [samples[idx].len];
@@ -642,30 +875,134 @@ function findWaistSpanByTorsoMask(frontMask, leftShoulder, rightShoulder, leftHi
     };
 }
 
+function findSoftBodySpanByMask(frontMask, leftShoulder, rightShoulder, leftHip, rightHip, minY, maxY, mode = 'min', section = 'torso') {
+    if (!frontMask || !leftShoulder || !rightShoulder || !leftHip || !rightHip) return null;
+    const h = frontMask.height;
+    const w = frontMask.width;
+    const shoulderY = ((leftShoulder.y + rightShoulder.y) / 2) * h;
+    const hipY = ((leftHip.y + rightHip.y) / 2) * h;
+    if (!isFinite(shoulderY) || !isFinite(hipY) || hipY <= shoulderY + 10) return null;
+    const scanStart = Math.max(0, Math.floor(minY));
+    const scanEnd = Math.min(h - 1, Math.ceil(maxY));
+    if (scanEnd <= scanStart) return null;
+
+    const shoulderCenterX = ((leftShoulder.x + rightShoulder.x) / 2) * w;
+    const hipCenterX = ((leftHip.x + rightHip.x) / 2) * w;
+    const leftShoulderX = leftShoulder.x * w;
+    const rightShoulderX = rightShoulder.x * w;
+    const leftHipX = leftHip.x * w;
+    const rightHipX = rightHip.x * w;
+    const isHips = section === 'hips';
+    const samples = [];
+
+    for (let y = scanStart; y <= scanEnd; y += 2) {
+        const t = clampValue((y - shoulderY) / Math.max(1, (hipY - shoulderY)), 0, 1.22);
+        const tForAxis = clampValue(t, 0, 1);
+        const expectedCenterX = shoulderCenterX + (hipCenterX - shoulderCenterX) * tForAxis;
+        const leftAxisX = leftShoulderX + (leftHipX - leftShoulderX) * tForAxis;
+        const rightAxisX = rightShoulderX + (rightHipX - rightShoulderX) * tForAxis;
+        const expectedWidth = Math.max(8, Math.abs(rightAxisX - leftAxisX));
+        const span = getSpanByCenterCrossing(frontMask, y, expectedCenterX, 5, true);
+        if (!span || span.len < Math.max(8, expectedWidth * (isHips ? 0.34 : 0.26))) continue;
+
+        const spanCenter = (span.x1 + span.x2) / 2;
+        const maxCenterDeviation = Math.max(14, expectedWidth * (isHips ? 0.62 : 0.50));
+        const centerDeviation = Math.abs(spanCenter - expectedCenterX);
+        if (centerDeviation > maxCenterDeviation) continue;
+
+        const maxWidth = expectedWidth * (isHips ? 2.35 : 1.95);
+        if (span.len > maxWidth) continue;
+        const corridorPad = Math.max(isHips ? 26 : 18, expectedWidth * (isHips ? 0.55 : 0.42));
+        const leftLimit = Math.min(leftAxisX, rightAxisX) - corridorPad;
+        const rightLimit = Math.max(leftAxisX, rightAxisX) + corridorPad;
+        if (span.x2 < leftLimit || span.x1 > rightLimit) continue;
+
+        const centerScore = clampValue(1 - (centerDeviation / Math.max(1, maxCenterDeviation)), 0, 1);
+        const widthScore = isHips
+            ? clampValue(span.len / Math.max(1, expectedWidth * 1.3), 0, 1)
+            : clampValue(1 - (span.len / Math.max(1, expectedWidth * 1.95)), 0, 1);
+        samples.push({
+            ...span,
+            expectedWidth,
+            centerDeviation,
+            relativeY: y / Math.max(1, h - 1),
+            confidence: 0.32 + centerScore * 0.22 + widthScore * 0.16,
+            source: 'softAnatomy',
+        });
+    }
+    if (!samples.length) return null;
+
+    const smoothed = samples.map((sample, idx) => {
+        const neighborhood = samples.filter((_, i) => Math.abs(i - idx) <= 2);
+        return {
+            sample,
+            smoothedLen: median(neighborhood.map((item) => item.len)),
+            smoothedConfidence: median(neighborhood.map((item) => item.confidence)),
+        };
+    });
+    let best = smoothed[0];
+    for (const item of smoothed) {
+        if (mode === 'max') {
+            if (item.smoothedLen > best.smoothedLen) best = item;
+        } else if (item.smoothedLen < best.smoothedLen) {
+            best = item;
+        }
+    }
+    const near = samples.filter((sample) => Math.abs(sample.y - best.sample.y) <= 2);
+    const x1 = Math.round(median(near.map((sample) => sample.x1)));
+    const x2 = Math.round(median(near.map((sample) => sample.x2)));
+    if (!isFinite(x1) || !isFinite(x2) || x2 <= x1) return null;
+    return {
+        ...best.sample,
+        x1,
+        x2,
+        len: x2 - x1 + 1,
+        confidence: clampValue(best.smoothedConfidence || best.sample.confidence || 0.42, 0.30, 0.70),
+        source: mode === 'max' ? 'softAnatomyMax' : 'softAnatomyMin',
+    };
+}
+
 function isValidDepth(widthCm, depthCm) {
     if (!widthCm || !depthCm || widthCm <= 0 || depthCm <= 0) return false;
     const ratio = depthCm / widthCm;
     return ratio >= 0.45 && ratio <= 1.6;
 }
 
-function estimateSideDepthCm(sideMask, relY, scaleCmPerPx) {
+function estimateSideDepthCm(sideMask, relY, scaleCmPerPx, sidePose = null, torsoT = null) {
     if (!sideMask || !scaleCmPerPx) return null;
     const h = sideMask.height;
-    const offsets = [0, -0.02, 0.02, -0.04, 0.04];
+    const w = sideMask.width;
+    const offsets = [0, -0.025, 0.025, -0.05, 0.05];
     const candidates = [];
     for (const off of offsets) {
-        const y = clampValue((relY + off) * h, 0, h - 1);
-        const span = getSpanByCenterCrossing(sideMask, y, sideMask.width * 0.5, 4, true);
+        let y = clampValue((relY + off) * h, 0, h - 1);
+        let expectedCenterX = w * 0.5;
+        if (sidePose?.ok && sidePose.points) {
+            const { leftShoulder, rightShoulder, leftHip, rightHip } = sidePose.points;
+            const shoulderY = ((leftShoulder.y + rightShoulder.y) / 2) * h;
+            const hipY = ((leftHip.y + rightHip.y) / 2) * h;
+            const shoulderCenterX = ((leftShoulder.x + rightShoulder.x) / 2) * w;
+            const hipCenterX = ((leftHip.x + rightHip.x) / 2) * w;
+            const t = torsoT != null && isFinite(torsoT)
+                ? clampValue(torsoT, 0, 1.18)
+                : clampValue((relY - 0.2) / 0.45, 0, 1);
+            y = clampValue(shoulderY + (hipY - shoulderY) * (t + off * 1.6), 0, h - 1);
+            expectedCenterX = shoulderCenterX + (hipCenterX - shoulderCenterX) * t;
+        }
+        const span = getSpanByCenterCrossing(sideMask, y, expectedCenterX, 5, true);
         if (!span || span.len < 6) continue;
-        candidates.push({ depthCm: span.len * scaleCmPerPx, absOffset: Math.abs(off), offset: off });
+        const centerPenalty = clampValue(1 - (Math.abs(((span.x1 + span.x2) / 2) - expectedCenterX) / Math.max(8, w * 0.16)), 0, 1);
+        candidates.push({ depthCm: span.len * scaleCmPerPx, absOffset: Math.abs(off), offset: off, span, confidence: centerPenalty });
     }
     if (!candidates.length) return null;
     const exact = candidates.find((c) => c.absOffset === 0);
     const medianDepth = median(candidates.map((c) => c.depthCm));
-    if (!exact) return { depthCm: medianDepth, source: 'sideNeighborMedian', consistent: false };
+    const medianConfidence = median(candidates.map((c) => c.confidence || 0.5)) || 0.5;
+    const nearest = candidates.reduce((best, item) => (!best || item.absOffset < best.absOffset ? item : best), null);
+    if (!exact) return { depthCm: medianDepth, source: 'sideNeighborMedian', consistent: false, confidence: medianConfidence, span: nearest?.span || null };
     const mismatch = Math.abs(exact.depthCm - medianDepth) / Math.max(1, medianDepth);
-    if (mismatch <= 0.18) return { depthCm: exact.depthCm, source: 'sideExact', consistent: true };
-    return { depthCm: medianDepth, source: 'sideNeighborMedian', consistent: false };
+    if (mismatch <= 0.18) return { depthCm: exact.depthCm, source: 'sideExact', consistent: true, confidence: exact.confidence || medianConfidence, span: exact.span };
+    return { depthCm: medianDepth, source: 'sideNeighborMedian', consistent: false, confidence: medianConfidence * 0.82, span: nearest?.span || null };
 }
 
 function measureCrossSectionWidth(maskObj, center, dir, maxSteps) {
@@ -750,9 +1087,13 @@ export function analyzeBodyScan({
     frontCanvas,
     frontCtx,
     frontMask = null,
+    frontMaskSource = null,
+    frontTorsoMask = null,
+    frontTorsoMaskSource = null,
     sideCanvas = null,
     sideCtx = null,
     sideMask = null,
+    sideMaskSource = null,
     landmarks,
     landmarksSide = null,
     profile,
@@ -777,11 +1118,11 @@ export function analyzeBodyScan({
         x: (((leftShoulder.x + rightShoulder.x + leftHip.x + rightHip.x) / 4) * frontW),
         y: (((leftShoulder.y + rightShoulder.y + leftHip.y + rightHip.y) / 4) * frontH),
     };
-    const mask = frontMask || buildForegroundMask(frontCanvas, frontCtx, torsoAnchor);
-    if (!mask) {
+    const personMask = frontMask || buildForegroundMask(frontCanvas, frontCtx, torsoAnchor);
+    if (!personMask) {
         return { ok: false, errors: ['Не удалось выделить силуэт на фронтальном фото.'], warnings, qualityReasons, methods, confidence, values: {}, overlay: null };
     }
-    const bounds = getMaskVerticalBounds(mask);
+    const bounds = getMaskVerticalBounds(personMask);
     if (!bounds || bounds.height < 40) {
         return { ok: false, errors: ['Силуэт определён ненадёжно. Проверьте фон и освещение.'], warnings, qualityReasons, methods, confidence, values: {}, overlay: null };
     }
@@ -790,14 +1131,32 @@ export function analyzeBodyScan({
     if (!isFinite(scaleCmPerPx) || scaleCmPerPx <= 0) {
         return { ok: false, errors: ['Ошибка масштабирования по росту.'], warnings, qualityReasons, methods, confidence, values: {}, overlay: null };
     }
+    const subjectHeightRatio = bounds.height / Math.max(1, personMask.height);
+    const smallSubject = subjectHeightRatio < 0.55;
+    if (smallSubject) {
+        warnings.push('Человек занимает слишком малую часть кадра: масштаб и сечения менее надежны.');
+    }
 
     const armRiskInfo = detectArmTorsoRisk(landmarks);
     warnings.push(...armRiskInfo.warnings);
+    const torsoSegmentation =
+        buildExternalTorsoSegmentation(personMask, frontTorsoMask, frontTorsoMaskSource) ||
+        buildPoseAwareTorsoMask(personMask, landmarks, torsoAnchor);
+    const mask = torsoSegmentation?.mask || personMask;
+    const limbMask = personMask;
 
-    const sideReady = !!(landmarksSide && sideCanvas && sideCanvas.width > 0 && sideCanvas.height > 0);
-    const resolvedSideMask = sideMask || (sideReady ? buildForegroundMask(sideCanvas, sideCtx, { x: sideCanvas.width * 0.5, y: sideCanvas.height * 0.5 }) : null);
+    const sidePoseValidation = landmarksSide ? validateSidePoseLandmarks(landmarksSide) : null;
+    if (sidePoseValidation) {
+        warnings.push(...sidePoseValidation.warnings);
+        if (!sidePoseValidation.ok && sidePoseValidation.errors.length) {
+            warnings.push(`Фото сбоку не используется: ${sidePoseValidation.errors.join(' ')}`);
+        }
+    }
+    const sideCandidateReady = !!(landmarksSide && sideCanvas && sideCanvas.width > 0 && sideCanvas.height > 0);
+    const resolvedSideMask = sideMask || (sideCandidateReady ? buildForegroundMask(sideCanvas, sideCtx, { x: sideCanvas.width * 0.5, y: sideCanvas.height * 0.5 }) : null);
     const sideBounds = resolvedSideMask ? getMaskVerticalBounds(resolvedSideMask) : null;
-    const scaleCmPerPxSide = sideBounds && sideBounds.height > 0 ? scanProfile.heightCm / sideBounds.height : null;
+    const sideUsable = !!(sidePoseValidation?.ok && resolvedSideMask && sideBounds && sideBounds.height > 40);
+    const scaleCmPerPxSide = sideUsable ? scanProfile.heightCm / sideBounds.height : null;
 
     const shoulderY = ((leftShoulder.y + rightShoulder.y) / 2) * mask.height;
     const hipY = ((leftHip.y + rightHip.y) / 2) * mask.height;
@@ -815,13 +1174,39 @@ export function analyzeBodyScan({
     const hipsMinY = hipY - torsoDelta * 0.06;
     const hipsMaxY = hipY + torsoDelta * 0.26;
 
-    const chestSpan = selectChestSpanFromProfile(torsoProfile, chestMinY, chestMaxY, shoulderY, hipY, shoulderWidthPx, armRiskInfo.risk);
+    let chestSpan = selectChestSpanFromProfile(torsoProfile, chestMinY, chestMaxY, shoulderY, hipY, shoulderWidthPx, armRiskInfo.risk);
     let waistSpan = findWaistSpanByTorsoMask(mask, leftShoulder, rightShoulder, leftHip, rightHip, waistStartY, waistEndY);
     let hipSpan = selectSpanFromProfile(hipsProfile, hipsMinY, hipsMaxY, 'max');
     let hipSearchSource = hipSpan ? 'narrowWindow' : 'none';
     if (!hipSpan) {
         hipSearchSource = 'expandedFallback';
         hipSpan = selectSpanFromProfile(hipsProfile, hipY - torsoDelta * 0.10, hipY + torsoDelta * 0.34, 'max');
+    }
+    const softFallbackParts = {};
+    const markSoftSpan = (span, partKey, source) => {
+        if (!span) return null;
+        const confidenceBase = span.confidence != null ? span.confidence : 0.45;
+        softFallbackParts[partKey] = source;
+        qualityReasons[partKey].push('сечение найдено по мягкой маске силуэта');
+        return {
+            ...span,
+            confidence: clampValue(confidenceBase * 0.82, 0.34, 0.72),
+            source: `${source}:${span.source || 'span'}`,
+            softFallback: true,
+        };
+    };
+
+    if (!waistSpan) {
+        const softWaistSpan = findSoftBodySpanByMask(personMask, leftShoulder, rightShoulder, leftHip, rightHip, waistStartY, waistEndY, 'min', 'torso');
+        if (softWaistSpan) waistSpan = markSoftSpan(softWaistSpan, 'waist', 'softPersonMask');
+    }
+
+    if (!hipSpan) {
+        const softHipSpan = findSoftBodySpanByMask(personMask, leftShoulder, rightShoulder, leftHip, rightHip, hipsMinY, hipsMaxY, 'max', 'hips');
+        if (softHipSpan) {
+            hipSpan = markSoftSpan(softHipSpan, 'hips', 'softPersonMask');
+            hipSearchSource = hipSearchSource === 'none' ? 'softPersonMask' : `${hipSearchSource}+softPersonMask`;
+        }
     }
 
     if (chestSpan?.shoulderLike) qualityReasons.chest.push('сечение похоже на плечевой пояс, уверенность снижена');
@@ -847,27 +1232,30 @@ export function analyzeBodyScan({
     }
 
     const circFromFront = (span, partKey, relY) => {
-        if (!span) return { value: null, method: null, depthSource: 'noSpan', depthConsistent: false };
+        if (!span) return { value: null, method: null, depthSource: 'noSpan', depthConsistent: false, sideSpan: null };
         const widthCm = span.len * scaleCmPerPx;
         const a = widthCm / 2;
         let b = null;
         let depthSource = 'frontOnlyApprox';
         let depthConsistent = false;
-        if (resolvedSideMask && scaleCmPerPxSide) {
-            const depthInfo = estimateSideDepthCm(resolvedSideMask, relY, scaleCmPerPxSide);
+        let sideSpan = null;
+        if (sideUsable && resolvedSideMask && scaleCmPerPxSide) {
+            const torsoT = clampValue((span.y - shoulderY) / Math.max(1, torsoDelta), 0, 1.2);
+            const depthInfo = estimateSideDepthCm(resolvedSideMask, relY, scaleCmPerPxSide, sidePoseValidation, torsoT);
             if (depthInfo && isValidDepth(widthCm, depthInfo.depthCm)) {
                 b = depthInfo.depthCm / 2;
                 depthSource = depthInfo.source;
                 depthConsistent = !!depthInfo.consistent;
+                sideSpan = depthInfo.span || null;
             } else if (depthInfo) {
                 depthSource = 'sideDepthInvalid';
             }
         }
         if (b == null) {
             b = scanProfile.k[partKey] * a;
-            return { value: ellipseCircumference(a, b), method: 'frontApprox', depthSource, depthConsistent };
+            return { value: ellipseCircumference(a, b), method: 'frontApprox', depthSource, depthConsistent, sideSpan };
         }
-        return { value: ellipseCircumference(a, b), method: 'measured', depthSource, depthConsistent };
+        return { value: ellipseCircumference(a, b), method: 'measured', depthSource, depthConsistent, sideSpan };
     };
 
     const blendWithStats = (geomValue, partKey, method) => {
@@ -899,6 +1287,25 @@ export function analyzeBodyScan({
         };
         return (scanProfile.stats[partKey] * scanProfile.heightCm) + bmiDelta * (bmiCm[partKey] || 0.8);
     };
+
+    if (smallSubject && methods.chest !== 'measured') {
+        chestBlended = statFallbackValue('chest');
+        chestFallbackUsed = true;
+        methods.chest = 'statFallback';
+        qualityReasons.chest.push('человек занимает мало кадра');
+    }
+    if (smallSubject && methods.waist !== 'measured') {
+        waistBlended = statFallbackValue('waist');
+        waistFallbackUsed = true;
+        methods.waist = 'statFallback';
+        qualityReasons.waist.push('человек занимает мало кадра');
+    }
+    if (smallSubject && methods.hips !== 'measured') {
+        hipsBlended = statFallbackValue('hips');
+        hipsFallbackUsed = true;
+        methods.hips = 'statFallback';
+        qualityReasons.hips.push('человек занимает мало кадра');
+    }
 
     const chestBaseConf = chestSpan ? (chestSpan.confidence || 0) : 0;
     const waistBaseConf = waistSpan ? (waistSpan.confidence || 0) : 0;
@@ -979,9 +1386,12 @@ export function analyzeBodyScan({
     if (!chestSpan) qualityReasons.chest.push('сечение не найдено');
     if (!waistSpan) qualityReasons.waist.push('сечение не найдено');
     if (!hipSpan) qualityReasons.hips.push('сечение не найдено');
-    if (methods.chest === 'frontApprox') qualityReasons.chest.push('нет профильного фото, глубина оценена приблизительно');
-    if (methods.waist === 'frontApprox') qualityReasons.waist.push('нет профильного фото, глубина оценена приблизительно');
-    if (methods.hips === 'frontApprox') qualityReasons.hips.push('нет профильного фото, глубина оценена приблизительно');
+    const sideApproxReason = landmarksSide && !sideUsable
+        ? 'профильное фото не прошло валидацию, глубина оценена приблизительно'
+        : 'нет профильного фото, глубина оценена приблизительно';
+    if (methods.chest === 'frontApprox') qualityReasons.chest.push(sideApproxReason);
+    if (methods.waist === 'frontApprox') qualityReasons.waist.push(sideApproxReason);
+    if (methods.hips === 'frontApprox') qualityReasons.hips.push(sideApproxReason);
     if (methods.chest === 'statFallback') qualityReasons.chest.push('грудь оценена статистически');
     if (methods.waist === 'statFallback') qualityReasons.waist.push('талия оценена статистически');
     if (methods.hips === 'statFallback') qualityReasons.hips.push('бедра оценены статистически');
@@ -997,15 +1407,15 @@ export function analyzeBodyScan({
     const leftKnee = getPoint(landmarks, 25);
     const rightKnee = getPoint(landmarks, 26);
     const c = getGenderCoefficients(scanProfile.gender);
-    const distNorm = (a, b) => Math.hypot((a.x - b.x) * mask.width, (a.y - b.y) * mask.height);
+    const distNorm = (a, b) => Math.hypot((a.x - b.x) * limbMask.width, (a.y - b.y) * limbMask.height);
 
     let armInfo = { value: null, method: null, confidence: 0 };
     if (leftShoulder && leftElbow) {
         const upperArmPx = distNorm(leftShoulder, leftElbow);
-        armInfo = measureLimb(mask, leftShoulder, leftElbow, scaleCmPerPx, upperArmPx * scaleCmPerPx * c.armLengthToWidth, 0.72);
+        armInfo = measureLimb(limbMask, leftShoulder, leftElbow, scaleCmPerPx, upperArmPx * scaleCmPerPx * c.armLengthToWidth, 0.72);
     } else if (rightShoulder && rightElbow) {
         const upperArmPx = distNorm(rightShoulder, rightElbow);
-        armInfo = measureLimb(mask, rightShoulder, rightElbow, scaleCmPerPx, upperArmPx * scaleCmPerPx * c.armLengthToWidth, 0.72);
+        armInfo = measureLimb(limbMask, rightShoulder, rightElbow, scaleCmPerPx, upperArmPx * scaleCmPerPx * c.armLengthToWidth, 0.72);
     }
     let arm = armInfo.value;
     methods.arm = armInfo.method;
@@ -1022,10 +1432,10 @@ export function analyzeBodyScan({
     let legInfo = { value: null, method: null, confidence: 0 };
     if (leftHip && leftKnee) {
         const thighPx = distNorm(leftHip, leftKnee);
-        legInfo = measureLimb(mask, leftHip, leftKnee, scaleCmPerPx, thighPx * scaleCmPerPx * c.legLengthToWidth, 0.82);
+        legInfo = measureLimb(limbMask, leftHip, leftKnee, scaleCmPerPx, thighPx * scaleCmPerPx * c.legLengthToWidth, 0.82);
     } else if (rightHip && rightKnee) {
         const thighPx = distNorm(rightHip, rightKnee);
-        legInfo = measureLimb(mask, rightHip, rightKnee, scaleCmPerPx, thighPx * scaleCmPerPx * c.legLengthToWidth, 0.82);
+        legInfo = measureLimb(limbMask, rightHip, rightKnee, scaleCmPerPx, thighPx * scaleCmPerPx * c.legLengthToWidth, 0.82);
     }
     let leg = legInfo.value;
     methods.leg = legInfo.method;
@@ -1065,6 +1475,11 @@ export function analyzeBodyScan({
             waist: { y1: waistStartY, y2: waistEndY },
             hips: { y1: hipsMinY, y2: hipsMaxY },
         },
+        sideSpans: {
+            chest: chestGeom.sideSpan,
+            waist: waistGeom.sideSpan,
+            hips: hipsGeom.sideSpan,
+        },
     };
     return {
         ok: true,
@@ -1079,8 +1494,21 @@ export function analyzeBodyScan({
         diagnostics: {
             bounds,
             scaleCmPerPx,
+            subjectHeightRatio,
             armRisk: armRiskInfo.risk,
             hipSearchSource,
+            maskSource: frontMaskSource || personMask.source || 'colorThreshold',
+            torsoMaskSource: mask.source || 'personMask',
+            partSegmentation: torsoSegmentation?.diagnostics || null,
+            softFallbackParts,
+            side: {
+                present: !!landmarksSide,
+                usable: sideUsable,
+                maskSource: sideMaskSource || resolvedSideMask?.source || null,
+                errors: sidePoseValidation?.errors || [],
+                warnings: sidePoseValidation?.warnings || [],
+                bounds: sideBounds,
+            },
             profile: scanProfile,
         },
     };
