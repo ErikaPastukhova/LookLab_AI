@@ -22,6 +22,7 @@ FILES=(
   "demo.html|frontend/demo.html"
   "style.css|frontend/style.css"
   "script.js|frontend/script.js"
+  "body-scan/bodyScanCore.js|frontend/body-scan/bodyScanCore.js"
   "landing.css|frontend/landing.css"
   "request-form.js|frontend/request-form.js"
   "assets/models/female_advanced.glb|frontend/assets/models/female_advanced.glb"

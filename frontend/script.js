@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { installGlobalErrorHandlers, showError, showNotice, showSuccess, normalizeNetworkError } from './ui/messages.js';
+import { analyzeBodyScan, getScanProfile as buildBodyScanProfile } from './body-scan/bodyScanCore.js';
 
 installGlobalErrorHandlers();
 
@@ -12,6 +13,11 @@ scene.background = new THREE.Color(0xe0e0e0);
 scene.fog = new THREE.Fog(0xe0e0e0, 5, 20);
 
 const canvasContainer = document.getElementById('canvas-container');
+function markUiReady() {
+    document.documentElement.classList.remove('ui-pending');
+    document.documentElement.classList.add('ui-ready');
+}
+
 const getRenderRect = () => (canvasContainer ? canvasContainer.getBoundingClientRect() : null);
 const getRenderSize = () => {
     const rect = getRenderRect();
@@ -24,12 +30,19 @@ const initialSize = getRenderSize();
 const camera = new THREE.PerspectiveCamera(50, initialSize.w / initialSize.h, 0.1, 100);
 camera.position.set(0, 1.1, 3.2);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(initialSize.w, initialSize.h);
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
-if (canvasContainer) canvasContainer.appendChild(renderer.domElement);
+let renderer = null;
+try {
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(initialSize.w, initialSize.h);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    if (canvasContainer) canvasContainer.appendChild(renderer.domElement);
+} catch (err) {
+    console.warn('WebGL renderer is unavailable; 3D mannequin preview is disabled.', err);
+    if (canvasContainer) canvasContainer.classList.add('webgl-unavailable');
+    markUiReady();
+}
 
 // СВЕТ
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -49,10 +62,12 @@ plane.rotation.x = -Math.PI / 2;
 plane.receiveShadow = true;
 scene.add(plane);
 
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.enablePan = false;
-controls.target.set(0, 1.0, 0); 
+const controls = renderer ? new OrbitControls(camera, renderer.domElement) : null;
+if (controls) {
+    controls.enableDamping = true;
+    controls.enablePan = false;
+    controls.target.set(0, 1.0, 0);
+}
 
 // --- CAMERA FRAMING (keep mannequin centered) ---
 let modelBounds = null; // { center: THREE.Vector3, size: THREE.Vector3 }
@@ -65,6 +80,7 @@ function getScaledBounds() {
 }
 
 function frameModelFront() {
+    if (!controls) return;
     const b = getScaledBounds();
     if (!b) return;
 
@@ -105,14 +121,18 @@ const MEASUREMENTS = {
 };
 
 // --- ЗАГРУЗКА ---
-const loader = new GLTFLoader();
+const loader = renderer ? new GLTFLoader() : null;
 
 function loadModel(gender) {
+    currentGender = gender;
+    if (!loader || !renderer) {
+        markUiReady();
+        return;
+    }
     if (modelRoot) {
         scene.remove(modelRoot);
         humanMesh = null; bonesList = [];
     }
-    currentGender = gender;
     
     // ВАЖНО: Проверь, что имя файла верное
     const filename = (gender === 'male')
@@ -179,8 +199,7 @@ function loadModel(gender) {
         frameModelFront();
 
         // Hide init loader once the first model is loaded and framed.
-        document.documentElement.classList.remove('ui-pending');
-        document.documentElement.classList.add('ui-ready');
+        markUiReady();
 
     }, undefined, function(e) {
         showError({
@@ -194,8 +213,7 @@ function loadModel(gender) {
         });
 
         // Even on error, stop blocking the UI behind the loader.
-        document.documentElement.classList.remove('ui-pending');
-        document.documentElement.classList.add('ui-ready');
+        markUiReady();
     });
 }
 
@@ -442,12 +460,13 @@ window.setCamera = function(view) {
 
 function animate() {
     requestAnimationFrame(animate);
-    controls.update();
-    renderer.render(scene, camera);
+    if (controls) controls.update();
+    if (renderer) renderer.render(scene, camera);
 }
-animate();
+if (renderer) animate();
 
 function onWindowResize() {
+    if (!renderer) return;
     const { w, h } = getRenderSize();
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -1541,21 +1560,7 @@ document.addEventListener('keydown', (e) => {
         const gender = bodyScanGender ? bodyScanGender.value : getMainGenderValue();
         const heightCm = parseFloat(heightInput ? heightInput.value : inputs.body.height.num.value) || 175;
         const weightKg = parseFloat(weightInput ? weightInput.value : '') || 70;
-        const hM = Math.max(1.0, heightCm / 100);
-        const bmi = weightKg / (hM * hM);
-        const bmiShift = clampValue((bmi - 22) * 0.01, -0.08, 0.14);
-        const baseK = gender === 'female'
-            ? { chest: 0.8, waist: 0.7, hips: 0.9 }
-            : { chest: 0.7, waist: 0.6, hips: 0.75 };
-        const k = {
-            chest: clampValue(baseK.chest + bmiShift, 0.55, 1.05),
-            waist: clampValue(baseK.waist + bmiShift, 0.5, 1.0),
-            hips: clampValue(baseK.hips + bmiShift, 0.6, 1.1)
-        };
-        const stats = gender === 'female'
-            ? { chest: 0.56, waist: 0.44, hips: 0.58 }
-            : { chest: 0.58, waist: 0.47, hips: 0.55 };
-        return { gender, heightCm, weightKg, bmi, k, stats };
+        return buildBodyScanProfile({ gender, heightCm, weightKg });
     }
 
     const DETECT_PASSES = 3;
@@ -2021,9 +2026,31 @@ document.addEventListener('keydown', (e) => {
         context.restore();
     }
 
+    function drawScanWindow(context, win, label) {
+        if (!context || !win || !isFinite(win.y1) || !isFinite(win.y2)) return;
+        const y1 = Math.max(0, Math.min(context.canvas.height, win.y1));
+        const y2 = Math.max(0, Math.min(context.canvas.height, win.y2));
+        if (y2 <= y1) return;
+        context.save();
+        context.fillStyle = 'rgba(32, 96, 160, 0.08)';
+        context.strokeStyle = 'rgba(32, 96, 160, 0.18)';
+        context.lineWidth = 1;
+        context.fillRect(0, y1, context.canvas.width, y2 - y1);
+        context.strokeRect(0, y1, context.canvas.width, y2 - y1);
+        context.fillStyle = 'rgba(32, 96, 160, 0.7)';
+        context.font = '11px sans-serif';
+        context.fillText(label, 6, Math.max(12, y1 + 12));
+        context.restore();
+    }
+
     function renderMeasurementOverlay(overlay) {
         if (!overlay || !ctx || !canvas) return;
         drawBodyImage();
+        if (new URLSearchParams(window.location.search).has('debugBodyScan')) {
+            drawScanWindow(ctx, overlay.windows?.chest, 'окно груди');
+            drawScanWindow(ctx, overlay.windows?.waist, 'окно талии');
+            drawScanWindow(ctx, overlay.windows?.hips, 'окно бедер');
+        }
         const conf = overlay.confidence || {};
         drawScanLine(ctx, overlay.chestY, overlay.chestSpan ? overlay.chestSpan.x1 : null, overlay.chestSpan ? overlay.chestSpan.x2 : null, conf.chest, 'Грудь');
         drawScanLine(ctx, overlay.waistY, overlay.waistSpan ? overlay.waistSpan.x1 : null, overlay.waistSpan ? overlay.waistSpan.x2 : null, conf.waist, 'Талия');
@@ -2170,7 +2197,115 @@ document.addEventListener('keydown', (e) => {
         return { depthCm: medianDepth, source: 'sideNeighborMedian', consistent: false };
     }
 
+    function formatBodyScanReasons(result) {
+        const labels = {
+            chest: 'грудь',
+            waist: 'талия',
+            hips: 'бёдра',
+            arm: 'бицепс',
+            leg: 'нога'
+        };
+        const methodLabels = {
+            measured: 'измерено по фронту и профилю',
+            frontApprox: 'примерно по фронтальному фото',
+            maskSection: 'измерено по силуэту',
+            lengthApprox: 'примерно по пропорциям',
+            statFallback: 'статистическая оценка'
+        };
+        const lines = [];
+        for (const key of Object.keys(labels)) {
+            const method = result.methods?.[key];
+            const conf = result.confidence?.[key];
+            const reasons = result.qualityReasons?.[key] || [];
+            if (!method && !reasons.length) continue;
+            const pct = isFinite(conf) ? `${Math.round(conf * 100)}%` : '—';
+            const methodText = methodLabels[method] || method || 'не определено';
+            const reasonText = reasons.length ? ` (${reasons.join('; ')})` : '';
+            lines.push(`${labels[key]}: ${methodText}, уверенность ${pct}${reasonText}`);
+        }
+        return lines;
+    }
+
     function applyBodyMeasurementsFromPose(landmarks, landmarksSide) {
+        const result = analyzeBodyScan({
+            frontCanvas: canvas,
+            frontCtx: ctx,
+            sideCanvas: canvasSide,
+            sideCtx: ctxSide,
+            landmarks,
+            landmarksSide,
+            profile: getScanProfile(),
+            previousHipsEstimate: lastHipsEstimate,
+        });
+
+        if (new URLSearchParams(window.location.search).has('debugBodyScan')) {
+            window.__lastBodyScanResult = result;
+        }
+
+        if (result.overlay) {
+            renderMeasurementOverlay(result.overlay);
+        }
+
+        if (!result.ok) {
+            const details = [...(result.errors || []), ...(result.warnings || [])].filter(Boolean);
+            summaryEl.textContent = details.length
+                ? details.join('\n')
+                : 'Не удалось надежно рассчитать параметры по этому фото.';
+            if (paramsContainer) paramsContainer.style.display = 'none';
+            if (adjustHintEl) adjustHintEl.style.display = 'none';
+            if (btnCompute) btnCompute.style.display = '';
+            if (btnDone) btnDone.style.display = 'none';
+            return;
+        }
+
+        lastHipsEstimate = result.nextHipsEstimate || lastHipsEstimate;
+        lastRawValues = {};
+        const parts = [];
+        const values = result.values || {};
+        for (const key of ['chest', 'waist', 'hips', 'arm', 'leg']) {
+            const value = values[key];
+            if (value != null && isFinite(value)) {
+                lastRawValues[key] = value;
+                if (paramInputs[key]) {
+                    paramInputs[key].value = Math.round(value);
+                    parts.push(key);
+                }
+            } else if (paramInputs[key]) {
+                paramInputs[key].value = '';
+            }
+        }
+
+        if (paramsContainer) paramsContainer.style.display = parts.length > 0 ? 'flex' : 'none';
+
+        const labels = {
+            chest: 'грудь',
+            waist: 'талия',
+            hips: 'бёдра',
+            arm: 'бицепс',
+            leg: 'ногу'
+        };
+        const missingParts = Object.keys(labels).filter((key) => !parts.includes(key));
+        const messages = [];
+        if (!landmarksSide) {
+            messages.push('Фронтальный режим: без фото сбоку глубина тела оценена приблизительно. Проверьте значения перед применением.');
+        }
+        if (result.warnings?.length) messages.push(...result.warnings);
+        if (missingParts.length > 0) {
+            messages.push(`Не удалось определить: ${missingParts.map((k) => labels[k]).join(', ')}.`);
+        }
+        messages.push(...formatBodyScanReasons(result));
+        summaryEl.textContent = messages.join('\n');
+
+        if (new URLSearchParams(window.location.search).has('debugBodyScan')) {
+            console.info('[BodyScan]', result);
+        }
+
+        if (adjustHintEl) adjustHintEl.style.display = parts.length > 0 ? 'inline' : 'none';
+        if (btnCompute) btnCompute.style.display = parts.length > 0 ? 'none' : '';
+        if (btnDone) btnDone.style.display = parts.length > 0 ? 'block' : 'none';
+    }
+
+    function applyBodyMeasurementsFromPoseLegacy(landmarks, landmarksSide) {
         const toPoint = (lm) => {
             if (!lm) return null;
             const x = lm.x !== undefined ? lm.x : (Array.isArray(lm) ? lm[0] : null);
@@ -2590,4 +2725,3 @@ document.addEventListener('keydown', (e) => {
         });
     }
 })();
-
