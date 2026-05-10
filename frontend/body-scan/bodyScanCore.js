@@ -628,6 +628,7 @@ function buildExternalTorsoSegmentation(personMask, externalMask, source = null)
     if (externalBounds.height < personBounds.height * 0.22) return null;
     const minAreaRatio = Math.max(0.012, personMask.areaRatio * 0.18);
     if (!externalMask.areaRatio || externalMask.areaRatio < minAreaRatio) return null;
+    if (personMask.areaRatio && externalMask.areaRatio > personMask.areaRatio * 0.92) return null;
     return {
         mask: {
             ...externalMask,
@@ -1139,9 +1140,9 @@ export function analyzeBodyScan({
 
     const armRiskInfo = detectArmTorsoRisk(landmarks);
     warnings.push(...armRiskInfo.warnings);
-    const torsoSegmentation =
-        buildExternalTorsoSegmentation(personMask, frontTorsoMask, frontTorsoMaskSource) ||
-        buildPoseAwareTorsoMask(personMask, landmarks, torsoAnchor);
+    const externalTorsoSegmentation = buildExternalTorsoSegmentation(personMask, frontTorsoMask, frontTorsoMaskSource);
+    const poseTorsoSegmentation = buildPoseAwareTorsoMask(personMask, landmarks, torsoAnchor);
+    const torsoSegmentation = externalTorsoSegmentation || poseTorsoSegmentation;
     const mask = torsoSegmentation?.mask || personMask;
     const limbMask = personMask;
 
@@ -1178,6 +1179,21 @@ export function analyzeBodyScan({
     let waistSpan = findWaistSpanByTorsoMask(mask, leftShoulder, rightShoulder, leftHip, rightHip, waistStartY, waistEndY);
     let hipSpan = selectSpanFromProfile(hipsProfile, hipsMinY, hipsMaxY, 'max');
     let hipSearchSource = hipSpan ? 'narrowWindow' : 'none';
+    const semanticFallbackParts = {};
+    if (!chestSpan && externalTorsoSegmentation && poseTorsoSegmentation?.diagnostics?.fallbackReason == null) {
+        const poseMask = poseTorsoSegmentation.mask;
+        const poseTorsoProfile = buildTorsoProfile(poseMask, leftShoulder, rightShoulder, leftHip, rightHip, profileStartY, profileEndY, 'torso');
+        const poseChestSpan = selectChestSpanFromProfile(poseTorsoProfile, chestMinY, chestMaxY, shoulderY, hipY, shoulderWidthPx, armRiskInfo.risk);
+        if (poseChestSpan) {
+            chestSpan = {
+                ...poseChestSpan,
+                confidence: clampValue((poseChestSpan.confidence || 0.5) * 0.88, 0.34, 0.86),
+                source: `poseTorsoFallback:${poseChestSpan.source || 'span'}`,
+            };
+            semanticFallbackParts.chest = poseTorsoSegmentation.mask.source || 'poseParts';
+            qualityReasons.chest.push('semantic body-part mask не дала сечение груди, использован pose fallback');
+        }
+    }
     if (!hipSpan) {
         hipSearchSource = 'expandedFallback';
         hipSpan = selectSpanFromProfile(hipsProfile, hipY - torsoDelta * 0.10, hipY + torsoDelta * 0.34, 'max');
@@ -1500,6 +1516,7 @@ export function analyzeBodyScan({
             maskSource: frontMaskSource || personMask.source || 'colorThreshold',
             torsoMaskSource: mask.source || 'personMask',
             partSegmentation: torsoSegmentation?.diagnostics || null,
+            semanticFallbackParts,
             softFallbackParts,
             side: {
                 present: !!landmarksSide,

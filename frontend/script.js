@@ -1156,6 +1156,41 @@ document.addEventListener('keydown', (e) => {
     let bodyPartSegmenter = null;
     let bodyPartSegmenterUnavailable = false;
     const externalScriptPromises = new Map();
+    const bodyPixModelConfigs = [
+        {
+            name: 'resnet50',
+            options: {
+                architecture: 'ResNet50',
+                outputStride: 16,
+                quantBytes: 2,
+            },
+        },
+        {
+            name: 'mobilenet-v1-100',
+            options: {
+                architecture: 'MobileNetV1',
+                outputStride: 16,
+                multiplier: 1.0,
+                quantBytes: 2,
+            },
+        },
+        {
+            name: 'mobilenet-v1-075',
+            options: {
+                architecture: 'MobileNetV1',
+                outputStride: 16,
+                multiplier: 0.75,
+                quantBytes: 2,
+            },
+        },
+    ];
+    const bodyPixPartAttempts = [
+        { internalResolution: 'high', segmentationThreshold: 0.55 },
+        { internalResolution: 'high', segmentationThreshold: 0.45 },
+        { internalResolution: 'medium', segmentationThreshold: 0.35 },
+    ];
+    // BodyPix 2.x part ids: 12/13 torso front/back, 14-17 upper-leg front/back.
+    const bodyPixTorsoAndHipParts = new Set([12, 13, 14, 15, 16, 17]);
     let isProcessing = false;
     let lastLandmarks = null;
     let lastLandmarksSide = null;
@@ -1266,13 +1301,27 @@ document.addEventListener('keydown', (e) => {
             await loadExternalScriptOnce('https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.2.0/dist/body-pix.min.js');
             if (!window.bodyPix) throw new Error('BodyPix global was not initialized.');
             if (window.tf?.ready) await window.tf.ready();
-            bodyPartSegmenter = await window.bodyPix.load({
-                architecture: 'MobileNetV1',
-                outputStride: 16,
-                multiplier: 0.75,
-                quantBytes: 2,
-            });
-            return bodyPartSegmenter;
+            if (window.tf?.setBackend && window.tf?.getBackend && window.tf.getBackend() !== 'webgl') {
+                try {
+                    await window.tf.setBackend('webgl');
+                    await window.tf.ready();
+                } catch (backendErr) {
+                    console.warn('TensorFlow.js WebGL backend is unavailable; using default backend.', backendErr);
+                }
+            }
+
+            const loadErrors = [];
+            for (const config of bodyPixModelConfigs) {
+                try {
+                    const net = await window.bodyPix.load(config.options);
+                    bodyPartSegmenter = { net, name: config.name, options: config.options };
+                    return bodyPartSegmenter;
+                } catch (modelErr) {
+                    loadErrors.push(`${config.name}: ${modelErr?.message || modelErr}`);
+                    console.warn(`BodyPix ${config.name} failed to load; trying fallback model.`, modelErr);
+                }
+            }
+            throw new Error(loadErrors.join(' | ') || 'No BodyPix model could be loaded.');
         } catch (err) {
             bodyPartSegmenterUnavailable = true;
             console.warn('Body-part segmentation is unavailable; using pose-aware torso mask fallback.', err);
@@ -1823,41 +1872,76 @@ document.addEventListener('keydown', (e) => {
     }
 
     async function buildBodyPartTorsoMaskForCanvas(sourceCanvas, anchor) {
-        const segmenter = await ensureBodyPartSegmenter();
+        const segmenterInfo = await ensureBodyPartSegmenter();
+        const segmenter = segmenterInfo?.net || segmenterInfo;
         if (!segmenter || !sourceCanvas || sourceCanvas.width <= 0 || sourceCanvas.height <= 0) return null;
         try {
-            const segmentation = await segmenter.segmentPersonParts(sourceCanvas, {
-                flipHorizontal: false,
-                internalResolution: 'medium',
-                segmentationThreshold: 0.7,
-                maxDetections: 1,
-            });
-            const raw = segmentation?.data;
-            const maskW = segmentation?.width || sourceCanvas.width;
-            const maskH = segmentation?.height || sourceCanvas.height;
-            if (!raw || !maskW || !maskH) return null;
-
-            const targetW = sourceCanvas.width;
-            const targetH = sourceCanvas.height;
-            // BodyPix part ids: torso front/back and upper-leg front/back. Arms, face, lower legs and feet stay out.
-            const torsoAndHipParts = new Set([2, 4, 6, 7, 12, 13]);
-            const binary = new Uint8Array(targetW * targetH);
-            for (let y = 0; y < targetH; y++) {
-                const sy = Math.min(maskH - 1, Math.floor((y / Math.max(1, targetH)) * maskH));
-                for (let x = 0; x < targetW; x++) {
-                    const sx = Math.min(maskW - 1, Math.floor((x / Math.max(1, targetW)) * maskW));
-                    const part = raw[sy * maskW + sx];
-                    if (torsoAndHipParts.has(part)) binary[y * targetW + x] = 1;
-                }
+            let best = null;
+            for (const attempt of bodyPixPartAttempts) {
+                const segmentation = await segmenter.segmentPersonParts(sourceCanvas, {
+                    flipHorizontal: false,
+                    internalResolution: attempt.internalResolution,
+                    segmentationThreshold: attempt.segmentationThreshold,
+                    maxDetections: 1,
+                });
+                const candidate = buildBodyPixTorsoMaskCandidate(segmentation, sourceCanvas, anchor, segmenterInfo, attempt);
+                if (!candidate) continue;
+                if (!best || candidate.score > best.score) best = candidate;
             }
-
-            const normalized = normalizeBinaryMask(binary, targetW, targetH, anchor, { smooth: true });
-            if (!normalized || normalized.areaRatio < 0.012) return null;
-            return { ...normalized, source: 'bodyPixParts' };
+            return best ? best.mask : null;
         } catch (err) {
             console.warn('Body-part segmentation failed; using pose-aware torso mask fallback.', err);
             return null;
         }
+    }
+
+    function buildBodyPixTorsoMaskCandidate(segmentation, sourceCanvas, anchor, segmenterInfo, attempt) {
+        const raw = segmentation?.data;
+        const maskW = segmentation?.width || sourceCanvas.width;
+        const maskH = segmentation?.height || sourceCanvas.height;
+        if (!raw || !maskW || !maskH) return null;
+
+        const targetW = sourceCanvas.width;
+        const targetH = sourceCanvas.height;
+        const binary = new Uint8Array(targetW * targetH);
+        const partCounts = {};
+        let partPixels = 0;
+        for (let y = 0; y < targetH; y++) {
+            const sy = Math.min(maskH - 1, Math.floor((y / Math.max(1, targetH)) * maskH));
+            for (let x = 0; x < targetW; x++) {
+                const sx = Math.min(maskW - 1, Math.floor((x / Math.max(1, targetW)) * maskW));
+                const part = raw[sy * maskW + sx];
+                if (!bodyPixTorsoAndHipParts.has(part)) continue;
+                binary[y * targetW + x] = 1;
+                partPixels++;
+                partCounts[part] = (partCounts[part] || 0) + 1;
+            }
+        }
+
+        if (partPixels < targetW * targetH * 0.006) return null;
+        const normalized = normalizeBinaryMask(binary, targetW, targetH, anchor, { smooth: true });
+        if (!normalized || normalized.areaRatio < 0.008) return null;
+        const bounds = getMaskVerticalBounds(normalized);
+        if (!bounds || bounds.height < targetH * 0.14) return null;
+
+        const source = [
+            'bodyPixParts',
+            segmenterInfo?.name || 'unknown-model',
+            `${attempt.internalResolution}@${attempt.segmentationThreshold}`,
+        ].join(':');
+        const partCoverage = Object.keys(partCounts).length / Math.max(1, bodyPixTorsoAndHipParts.size);
+        const heightScore = bounds.height / Math.max(1, targetH);
+        const areaScore = normalized.areaRatio;
+        return {
+            score: areaScore * 3 + heightScore * 0.45 + partCoverage * 0.12,
+            mask: {
+                ...normalized,
+                source,
+                bodyPixModel: segmenterInfo?.name || null,
+                bodyPixAttempt: attempt,
+                bodyPixPartCounts: partCounts,
+            },
+        };
     }
 
     function colorDistanceSq(r1, g1, b1, r2, g2, b2) {
