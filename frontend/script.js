@@ -789,7 +789,7 @@ document.addEventListener('keydown', (e) => {
         bottom: [
             { id: 'waist', name: 'ширину пояса', color: '#28a745', count: 2 },
             { id: 'hips',  name: 'ширину бедер', color: '#ffc107', count: 2 },
-            { id: 'leg',   name: 'ширину штанины', color: '#17a2b8', count: 2 }
+            { id: 'leg',   name: 'ширину брючины', color: '#17a2b8', count: 2 }
         ],
         dress: [
             { id: 'chest', name: 'ширину груди', color: '#007bff', count: 2 },
