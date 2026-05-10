@@ -547,6 +547,43 @@
 - В `scripts/body_scan_browser_smoke.mjs` добавлен критерий `fullGeometricSuccess`: smoke падает, если ни одно фото не посчитало `chest`, `waist`, `hips`, `arm`, `leg` без `statFallback`.
 - Локальный smoke нашел полный кейс `front-side-female-white-shirt`: `chest/waist/hips = measured`, `arm/leg = maskSection`. Талия и бедра при этом низкоуверенные и помечены как `softPersonMask`, поэтому UI честно предупреждает о качестве.
 
+## Реализованный шаг: усиление BodyPix body-part model
+
+Цель: улучшить именно модельный слой body-part segmentation, а не только эвристики после маски.
+
+Что изменено:
+
+1. Исправлен mapping BodyPix 2.x part ids.
+   - Торс и верх бедер: `12, 13, 14, 15, 16, 17`.
+   - Руки, лицо, голени и стопы исключаются.
+   - Это важно, потому что ошибочный mapping может сам добавлять руки в torso mask.
+
+2. Основная body-part модель теперь пробует более сильный BodyPix `ResNet50`.
+   - Если `ResNet50` не загрузился, fallback идет на `MobileNetV1 1.0`.
+   - Если и он недоступен, fallback идет на прежний облегченный `MobileNetV1 0.75`.
+
+3. Для `segmentPersonParts` добавлены несколько попыток качества:
+   - `high @ 0.55`;
+   - `high @ 0.45`;
+   - `medium @ 0.35`.
+
+4. Из нескольких body-part masks выбирается лучшая по площади, вертикальному покрытию и количеству найденных нужных parts.
+
+5. В `source` маски теперь попадает модель и режим, например:
+   - `bodyPixParts:resnet50:high@0.55`;
+   - `bodyPixParts:mobilenet-v1-100:medium@0.35`.
+
+6. Добавлена защита от регрессии strict mask:
+   - если semantic BodyPix mask прошла валидацию, но не дала сечение груди, грудь добирается через pose-aware torso fallback;
+   - external body-part mask отбрасывается, если она по площади стала больше person mask и явно перестала быть маской торса;
+   - в diagnostics появляется `semanticFallbackParts`.
+
+Ожидаемый эффект:
+
+- Если BodyPix реально доступен в браузере, strict torso mask должна чаще строиться из semantic parts, а не из pose-aware fallback.
+- Руки должны реже попадать в торс за счет корректного part-id mapping.
+- На слабых устройствах расчет не должен ломаться: при проблемах с более тяжелой моделью останутся fallback-модели и затем pose-aware fallback.
+
 ## Основные риски
 
 - Полная автоматизация по одному фото останется нестабильной на произвольных пользовательских изображениях.
