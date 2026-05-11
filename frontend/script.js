@@ -1385,8 +1385,9 @@ document.addEventListener('keydown', (e) => {
             scanProcessing.hidden = true;
             scanProcessing.setAttribute('aria-busy', 'false');
         }
-        const label = lastBodyScanResult?.ok ? 'Пересчитать' : 'Вычислить';
-        setComputeButton({ visible: hasFrontPhoto(), disabled: false, label });
+        if (btnCompute && btnCompute.style.display !== 'none') {
+            setComputeButton({ visible: hasFrontPhoto(), disabled: false, label: 'Вычислить' });
+        }
     }
 
     function resetScanResult({ clearSummary = true, redraw = true } = {}) {
@@ -1430,6 +1431,15 @@ document.addEventListener('keydown', (e) => {
         setComputeButton({ visible: hasFrontPhoto(), disabled: false, label: 'Вычислить' });
     }
 
+    function hasScanResult() {
+        return !!lastBodyScanResult || Object.keys(lastRawValues || {}).length > 0;
+    }
+
+    function invalidateScanResult() {
+        if (!hasScanResult()) return;
+        resetScanResult({ clearSummary: true, redraw: true });
+    }
+
     btnOpen.onclick = () => {
         modal.style.display = 'flex';
         // demo.html renders modal markup after the script tag, so init dropdown on open.
@@ -1451,7 +1461,7 @@ document.addEventListener('keydown', (e) => {
 
     [heightInput, weightInput].filter(Boolean).forEach((el) => {
         el.addEventListener('input', () => {
-            if (lastLandmarks) applyBodyMeasurementsFromPose(lastLandmarks, lastLandmarksSide);
+            invalidateScanResult();
         });
     });
     const bodyScanGender = document.getElementById('body-scan-gender');
@@ -1464,7 +1474,7 @@ document.addEventListener('keydown', (e) => {
             }
             const activeGender = bodyScanGender ? bodyScanGender.value : getMainGenderValue();
             syncDefaultWeight(activeGender, false);
-            if (lastLandmarks) applyBodyMeasurementsFromPose(lastLandmarks, lastLandmarksSide);
+            invalidateScanResult();
         });
     });
 
@@ -2714,9 +2724,9 @@ document.addEventListener('keydown', (e) => {
 
         if (adjustHintEl) adjustHintEl.style.display = parts.length > 0 ? 'inline' : 'none';
         setComputeButton({
-            visible: hasFrontPhoto(),
+            visible: parts.length === 0 && hasFrontPhoto(),
             disabled: false,
-            label: parts.length > 0 ? 'Пересчитать' : 'Вычислить',
+            label: 'Вычислить',
         });
         if (btnDone) btnDone.style.display = parts.length > 0 ? 'block' : 'none';
     }
