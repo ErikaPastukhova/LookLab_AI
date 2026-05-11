@@ -1361,6 +1361,12 @@ document.addEventListener('keydown', (e) => {
         if (instr) instr.innerText = text || 'Загрузите фото и нажмите кнопку';
     }
 
+    function waitForNextPaint() {
+        return new Promise((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(resolve));
+        });
+    }
+
     function setComputeButton({ visible = hasFrontPhoto(), disabled = false, label = 'Вычислить' } = {}) {
         if (!btnCompute) return;
         btnCompute.style.display = visible ? '' : 'none';
@@ -1426,6 +1432,7 @@ document.addEventListener('keydown', (e) => {
     }
 
     function setScanValidationError(message, instruction = 'Проверьте фото') {
+        clearScanBusy();
         setBodyScanInstruction(instruction);
         setSummary(message);
         setComputeButton({ visible: hasFrontPhoto(), disabled: false, label: 'Вычислить' });
@@ -1592,7 +1599,10 @@ document.addEventListener('keydown', (e) => {
     if (btnCompute) {
         btnCompute.onclick = async () => {
             if (!img.src) return;
+            setScanBusy('Готовим анализ...');
+            await waitForNextPaint();
             drawBodyImage();
+            await waitForNextPaint();
             await runPose();
         };
     }
@@ -1698,9 +1708,11 @@ document.addEventListener('keydown', (e) => {
         isProcessing = true;
         setBodyScanInstruction('Вычисляем...');
         setScanBusy('Загружаем модели...');
+        await waitForNextPaint();
         try {
             const detector = await ensurePoseLandmarker();
             setScanBusy('Распознаём позу спереди...');
+            await waitForNextPaint();
             if (!detector) {
                 setBodyScanInstruction('Загрузите фото и нажмите кнопку');
                 setSummary('Не удалось загрузить модуль распознавания. Проверьте интернет и попробуйте ещё раз.');
@@ -1717,6 +1729,7 @@ document.addEventListener('keydown', (e) => {
             lastLandmarksSide = null;
             if (imgSide && imgSide.src && imgSide.complete && imgSide.naturalWidth > 0 && canvasSide && canvasSide.width > 0) {
                 setScanBusy('Распознаём позу сбоку...');
+                await waitForNextPaint();
                 const poseSide = await detectPoseMedian(detector, imgSide, DETECT_PASSES);
                 if (poseSide && poseSide.length > 0) lastLandmarksSide = poseSide;
             }
@@ -1729,13 +1742,16 @@ document.addEventListener('keydown', (e) => {
                 };
             };
             setScanBusy('Сегментируем силуэт...');
+            await waitForNextPaint();
             lastFrontMask = await buildPersonMaskForCanvas(canvas, maskAnchor(lastLandmarks, canvas));
             setScanBusy('Сегментируем части тела...');
+            await waitForNextPaint();
             lastFrontTorsoMask = await buildBodyPartTorsoMaskForCanvas(canvas, maskAnchor(lastLandmarks, canvas));
             lastSideMask = lastLandmarksSide && canvasSide && canvasSide.width > 0
                 ? await buildPersonMaskForCanvas(canvasSide, maskAnchor(lastLandmarksSide, canvasSide))
                 : null;
             setScanBusy('Вычисляем параметры...');
+            await waitForNextPaint();
             setBodyScanInstruction('Параметры вычислены');
             applyBodyMeasurementsFromPose(lastLandmarks, lastLandmarksSide);
         } catch (err) {
@@ -2613,18 +2629,6 @@ document.addEventListener('keydown', (e) => {
         ));
     }
 
-    function getShortBodyScanWarning(result) {
-        const warnings = result?.warnings || [];
-        if (warnings.some((warning) => String(warning).includes('Руки близко'))) {
-            return 'Руки близко к корпусу, поэтому точность ниже.';
-        }
-        const sideInfo = result?.diagnostics?.side;
-        if (!sideInfo?.usable) {
-            return 'Без фото сбоку глубина тела оценена приблизительно.';
-        }
-        return '';
-    }
-
     function applyBodyMeasurementsFromPose(landmarks, landmarksSide) {
         const result = analyzeBodyScan({
             frontCanvas: canvas,
@@ -2708,14 +2712,9 @@ document.addEventListener('keydown', (e) => {
             setSummary(messages.join('\n'));
         } else {
             const approximate = hasApproximateBodyScanParts(result) || missingParts.length > 0 || (result.warnings?.length || 0) > 0;
-            const shortMessages = [
-                approximate
-                    ? 'Часть параметров рассчитана приблизительно. Проверьте значения.'
-                    : 'Параметры рассчитаны. Проверьте значения перед применением.'
-            ];
-            const warning = getShortBodyScanWarning(result);
-            if (warning) shortMessages.push(warning);
-            setSummary(shortMessages.join('\n'));
+            setSummary(approximate
+                ? 'Часть параметров рассчитана приблизительно. Проверьте значения.'
+                : 'Параметры рассчитаны. Проверьте значения перед применением.');
         }
 
         if (debugBodyScan) {
