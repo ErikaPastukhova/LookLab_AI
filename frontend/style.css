@@ -21,6 +21,10 @@
   --font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'SF Mono', 'Consolas', monospace;
   --demo-topbar-h: 56px;
+  /* Vertical stack gap in #left-panel (e.g. disclaimer ↔ Одежда) */
+  --demo-panel-stack-gap: 12px;
+  /* Space from bottom of fixed demo topbar to top of side panels (desktop); larger than stack gap reads better against full-width bar */
+  --demo-below-topbar-gap: 20px;
 }
 
 /* --- БАЗОВЫЕ СТИЛИ --- */
@@ -63,7 +67,7 @@ html, body {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--demo-panel-stack-gap);
   z-index: 100;
 }
 
@@ -1284,7 +1288,7 @@ input[name="gender-select"]:checked + span {
 
   #left-panel,
   #ui-panel {
-    top: calc(14px + var(--demo-topbar-h));
+    top: calc(var(--demo-topbar-h) + var(--demo-below-topbar-gap));
   }
 
   .btn-exit-demo {

@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # If not provided, the backend falls back to the demo mock catalog.
     catalog_bucket: str = ""
     catalog_object_key: str = "catalog/catalog.json"
+    # When STORAGE_BACKEND=local: if set, catalog JSON is fetched from this HTTPS root
+    # (e.g. https://www.looklab-ai.ru) + /{catalog_object_key}. If empty, Yandex path-style
+    # https://storage.yandexcloud.net/{catalog_bucket}/{catalog_object_key} is used.
+    catalog_http_base_url: str = ""
 
     tryon_max_upload_mb: int = 10
 
