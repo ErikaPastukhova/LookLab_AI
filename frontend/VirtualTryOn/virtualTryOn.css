@@ -19,8 +19,8 @@
   --vto-preview-h: 500px;
   --vto-primary-action-h: 44px;
   --vto-catalog-viewport-h: clamp(320px, 46dvh, calc(var(--vto-catalog-card-h) * 2 + var(--vto-catalog-gap)));
-  --vto-catalog-image-pad-x: 10px;
-  --vto-catalog-image-pad-y: 8px;
+  --vto-catalog-image-pad-x: 4px;
+  --vto-catalog-image-pad-y: 4px;
 }
 
 /* Prevent fixed-height grid items from overflowing rows due to padding/border. */
@@ -810,8 +810,8 @@ html, body {
 
 @media (max-width: 900px) {
   :root {
-    --vto-catalog-image-pad-x: 12px;
-    --vto-catalog-image-pad-y: 10px;
+    --vto-catalog-image-pad-x: 4px;
+    --vto-catalog-image-pad-y: 4px;
   }
 }
 
