@@ -1191,11 +1191,61 @@ function setupCatalogPagerMediaListener() {
   }
 }
 
+function setupOnboardingDialog() {
+  const root = document.getElementById('vto-onboarding-root');
+  const openBtn = document.getElementById('vto-onboarding-open');
+  const closeBtn = document.getElementById('vto-onboarding-close');
+  const backdrop = document.getElementById('vto-onboarding-backdrop');
+  const dialog = document.getElementById('vto-onboarding-dialog');
+  if (!root || !openBtn || !closeBtn || !backdrop || !dialog) return () => {};
+
+  let lastFocus = null;
+
+  const isCollapsed = () => root.classList.contains('vto-onboarding-root--collapsed');
+
+  const closeModal = () => {
+    if (isCollapsed()) return;
+    root.classList.add('vto-onboarding-root--collapsed');
+    root.removeAttribute('hidden');
+    root.setAttribute('aria-hidden', 'true');
+    openBtn.setAttribute('aria-expanded', 'false');
+    document.body.classList.remove('vto-onboarding-open');
+    if (lastFocus && typeof lastFocus.focus === 'function') {
+      lastFocus.focus({ preventScroll: true });
+    }
+    lastFocus = null;
+  };
+
+  const openModal = () => {
+    lastFocus = document.activeElement;
+    root.classList.remove('vto-onboarding-root--collapsed');
+    root.removeAttribute('hidden');
+    root.setAttribute('aria-hidden', 'false');
+    openBtn.setAttribute('aria-expanded', 'true');
+    document.body.classList.add('vto-onboarding-open');
+    window.requestAnimationFrame(() => {
+      try {
+        dialog.focus({ preventScroll: true });
+      } catch {
+        // ignore focus errors in edge environments
+      }
+    });
+  };
+
+  openBtn.addEventListener('click', () => openModal());
+  closeBtn.addEventListener('click', () => closeModal());
+  backdrop.addEventListener('click', () => closeModal());
+
+  return closeModal;
+}
+
 async function boot() {
   // Helpful hint for local development / demos.
   if (window.location.protocol === 'file:') {
     setStatusNotice('Совет: откройте страницу через локальный сервер (а не file://), иначе браузер может блокировать JS‑модули и запросы.');
   }
+
+  const closeOnboardingModal = setupOnboardingDialog();
 
   ensureCategories();
   setupCategoryDropdown();
@@ -1229,7 +1279,16 @@ async function boot() {
   });
 
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeShareMenu();
+    if (e.key !== 'Escape') return;
+    const onboardingRoot = document.getElementById('vto-onboarding-root');
+    if (
+      onboardingRoot &&
+      !onboardingRoot.classList.contains('vto-onboarding-root--collapsed')
+    ) {
+      closeOnboardingModal?.();
+      return;
+    }
+    closeShareMenu();
   });
 
   // Default: no photo yet.

@@ -30,6 +30,9 @@ FILES=(
   "VirtualTryOn/virtual-try-on.html|frontend/VirtualTryOn/virtual-try-on.html"
   "VirtualTryOn/virtualTryOn.js|frontend/VirtualTryOn/virtualTryOn.js"
   "VirtualTryOn/virtualTryOn.css|frontend/VirtualTryOn/virtualTryOn.css"
+  "VirtualTryOn/assets/onboarding/hanger.png|frontend/VirtualTryOn/assets/onboarding/hanger.png"
+  "VirtualTryOn/assets/onboarding/person.png|frontend/VirtualTryOn/assets/onboarding/person.png"
+  "VirtualTryOn/assets/onboarding/sparkles.png|frontend/VirtualTryOn/assets/onboarding/sparkles.png"
   "VirtualTryOn/catalog/categories.js|frontend/VirtualTryOn/catalog/categories.js"
   "ui/messages.js|frontend/ui/messages.js"
   "ui/messages.css|frontend/ui/messages.css"
@@ -41,6 +44,7 @@ content_type_for() {
     css)  echo "text/css; charset=utf-8" ;;
     js)   echo "application/javascript; charset=utf-8" ;;
     glb)  echo "model/gltf-binary" ;;
+    png)  echo "image/png" ;;
     *)    echo "application/octet-stream" ;;
   esac
 }

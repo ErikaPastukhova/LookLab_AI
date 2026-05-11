@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Виртуальная примерка</title>
+  <title>ИИ-примерочная</title>
   <link href="./virtualTryOn.css" rel="stylesheet" type="text/css" />
   <link href="../ui/messages.css" rel="stylesheet" type="text/css" />
 </head>
@@ -13,7 +13,21 @@
       <span class="vto-back-icon" aria-hidden="true">←</span>
       <span class="vto-back-text">Назад</span>
     </a>
-    <div class="vto-title">Виртуальная примерка</div>
+    <div class="vto-title-wrap">
+      <h1 class="vto-title">ИИ-примерочная</h1>
+      <button
+        id="vto-onboarding-open"
+        class="vto-onboarding-help"
+        type="button"
+        aria-haspopup="dialog"
+        aria-controls="vto-onboarding-dialog"
+        aria-expanded="false"
+        title="Как работает примерка"
+      >
+        <span class="vto-onboarding-help-mark" aria-hidden="true">?</span>
+        <span class="vto-sr-only">Как работает примерка</span>
+      </button>
+    </div>
     <div class="vto-header-spacer"></div>
   </header>
 
@@ -178,6 +192,102 @@
     </section>
   </main>
 
+  <div
+    id="vto-onboarding-root"
+    class="vto-onboarding-root vto-onboarding-root--collapsed"
+    aria-hidden="true"
+  >
+    <div
+      id="vto-onboarding-backdrop"
+      class="vto-onboarding-backdrop"
+      tabindex="-1"
+    ></div>
+    <div
+      id="vto-onboarding-dialog"
+      class="vto-onboarding-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="vto-onboarding-title"
+      tabindex="-1"
+    >
+      <div class="vto-onboarding-header">
+        <h2 id="vto-onboarding-title" class="vto-onboarding-title">Как работает примерка</h2>
+        <button
+          id="vto-onboarding-close"
+          type="button"
+          class="vto-onboarding-close"
+          aria-label="Закрыть"
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+      <div class="vto-onboarding-body">
+        <div class="vto-onboarding-track">
+          <div class="vto-onboarding-rail" aria-hidden="true"></div>
+
+          <div class="vto-onboarding-step">
+            <div class="vto-onboarding-icon-cell">
+              <div class="vto-onboarding-icon-box">
+                <img
+                  class="vto-onboarding-icon"
+                  src="./assets/onboarding/hanger.png"
+                  alt=""
+                  aria-hidden="true"
+                />
+              </div>
+            </div>
+            <div class="vto-onboarding-text">
+              <div class="vto-onboarding-heading">
+                <span class="vto-onboarding-num">1</span>
+                <span class="vto-onboarding-step-title">Выберите товар</span>
+              </div>
+              <p class="vto-onboarding-desc">Выберите любую вещь из каталога, чтобы примерить на себя.</p>
+            </div>
+          </div>
+
+          <div class="vto-onboarding-step">
+            <div class="vto-onboarding-icon-cell">
+              <div class="vto-onboarding-icon-box">
+                <img
+                  class="vto-onboarding-icon"
+                  src="./assets/onboarding/person.png"
+                  alt=""
+                  aria-hidden="true"
+                />
+              </div>
+            </div>
+            <div class="vto-onboarding-text">
+              <div class="vto-onboarding-heading">
+                <span class="vto-onboarding-num">2</span>
+                <span class="vto-onboarding-step-title">Загрузите своё фото</span>
+              </div>
+              <p class="vto-onboarding-desc">Используйте фото в полный рост при хорошем освещении.</p>
+            </div>
+          </div>
+
+          <div class="vto-onboarding-step">
+            <div class="vto-onboarding-icon-cell">
+              <div class="vto-onboarding-icon-box">
+                <img
+                  class="vto-onboarding-icon"
+                  src="./assets/onboarding/sparkles.png"
+                  alt=""
+                  aria-hidden="true"
+                />
+              </div>
+            </div>
+            <div class="vto-onboarding-text">
+              <div class="vto-onboarding-heading">
+                <span class="vto-onboarding-num">3</span>
+                <span class="vto-onboarding-step-title">Смотрите результат</span>
+              </div>
+              <p class="vto-onboarding-desc">Мы покажем, как одежда сидит на вас с реалистичным эффектом.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="./virtualTryOn.js"></script>
   <script>
