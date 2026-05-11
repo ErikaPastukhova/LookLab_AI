@@ -1334,6 +1334,8 @@ document.addEventListener('keydown', (e) => {
     const sidePlaceholder = document.getElementById('body-scan-side-placeholder');
     const sidePreviewEl = document.getElementById('body-scan-side-preview');
     const toolbar = document.getElementById('body-scan-toolbar');
+    const scanProcessing = document.getElementById('body-scan-processing');
+    const scanProcessingText = document.getElementById('body-scan-processing-text');
     const getDefaultWeightByGender = (gender) => gender === 'female' ? 60 : 70;
     const syncDefaultWeight = (gender, force = false) => {
         if (!weightInput) return;
@@ -1342,23 +1344,52 @@ document.addEventListener('keydown', (e) => {
         if (canReplace) weightInput.value = String(getDefaultWeightByGender(gender));
     };
 
-    btnOpen.onclick = () => {
-        modal.style.display = 'flex';
-        // demo.html renders modal markup after the script tag, so init dropdown on open.
-        ensureBodyScanGenderDropdown();
-        ensurePoseLandmarker(); // Предзагрузка модели в фоне
-        fileInput.value = "";
-        if (fileInputSideCanvas) fileInputSideCanvas.value = "";
-        summaryEl.textContent = "";
-        if (adjustHintEl) adjustHintEl.style.display = 'none';
-        if (btnCompute) btnCompute.style.display = '';
+    function isBodyScanDebug() {
+        return new URLSearchParams(window.location.search).has('debugBodyScan');
+    }
+
+    function hasFrontPhoto() {
+        return !!(img && img.src);
+    }
+
+    function setSummary(text) {
+        if (summaryEl) summaryEl.textContent = text || '';
+    }
+
+    function setBodyScanInstruction(text) {
+        const instr = document.getElementById('body-scan-instruction');
+        if (instr) instr.innerText = text || 'Загрузите фото и нажмите кнопку';
+    }
+
+    function setComputeButton({ visible = hasFrontPhoto(), disabled = false, label = 'Вычислить' } = {}) {
+        if (!btnCompute) return;
+        btnCompute.style.display = visible ? '' : 'none';
+        btnCompute.disabled = !!disabled;
+        btnCompute.textContent = label;
+    }
+
+    function setScanBusy(text) {
+        const label = text || 'Анализируем фото...';
+        if (scanProcessing) {
+            scanProcessing.hidden = false;
+            scanProcessing.setAttribute('aria-busy', 'true');
+        }
+        if (scanProcessingText) scanProcessingText.textContent = label;
+        setComputeButton({ visible: hasFrontPhoto(), disabled: true, label: 'Вычисляем...' });
         if (btnDone) btnDone.style.display = 'none';
-        if (paramsContainer) paramsContainer.style.display = 'none';
-        if (frontPlaceholder) frontPlaceholder.style.display = 'flex';
-        if (frontPreview) frontPreview.style.display = 'none';
-        if (sidePlaceholder) sidePlaceholder.style.display = 'flex';
-        if (sidePreviewEl) sidePreviewEl.style.display = 'none';
-        if (toolbar) toolbar.style.display = 'none';
+        setSummary(label);
+    }
+
+    function clearScanBusy() {
+        if (scanProcessing) {
+            scanProcessing.hidden = true;
+            scanProcessing.setAttribute('aria-busy', 'false');
+        }
+        const label = lastBodyScanResult?.ok ? 'Пересчитать' : 'Вычислить';
+        setComputeButton({ visible: hasFrontPhoto(), disabled: false, label });
+    }
+
+    function resetScanResult({ clearSummary = true, redraw = true } = {}) {
         lastLandmarks = null;
         lastLandmarksSide = null;
         lastFrontMask = null;
@@ -1367,8 +1398,46 @@ document.addEventListener('keydown', (e) => {
         lastRawValues = {};
         lastHipsEstimate = null;
         lastBodyScanResult = null;
-        img.src = '';
-        imgSide.src = '';
+        Object.values(paramInputs).forEach((el) => {
+            if (el) el.value = '';
+        });
+        if (paramsContainer) paramsContainer.style.display = 'none';
+        if (adjustHintEl) adjustHintEl.style.display = 'none';
+        if (btnDone) btnDone.style.display = 'none';
+        if (clearSummary) setSummary('');
+        setBodyScanInstruction('Загрузите фото и нажмите кнопку');
+        setComputeButton({ visible: hasFrontPhoto(), disabled: false, label: 'Вычислить' });
+        if (redraw) drawBodyImage();
+    }
+
+    function resetScanSession() {
+        isProcessing = false;
+        img = new Image();
+        imgSide = new Image();
+        clearScanBusy();
+        resetScanResult({ clearSummary: true, redraw: false });
+        if (frontPlaceholder) frontPlaceholder.style.display = 'flex';
+        if (frontPreview) frontPreview.style.display = 'none';
+        if (sidePlaceholder) sidePlaceholder.style.display = 'flex';
+        if (sidePreviewEl) sidePreviewEl.style.display = 'none';
+        if (toolbar) toolbar.style.display = 'none';
+        setComputeButton({ visible: false, disabled: false, label: 'Вычислить' });
+    }
+
+    function setScanValidationError(message, instruction = 'Проверьте фото') {
+        setBodyScanInstruction(instruction);
+        setSummary(message);
+        setComputeButton({ visible: hasFrontPhoto(), disabled: false, label: 'Вычислить' });
+    }
+
+    btnOpen.onclick = () => {
+        modal.style.display = 'flex';
+        // demo.html renders modal markup after the script tag, so init dropdown on open.
+        ensureBodyScanGenderDropdown();
+        ensurePoseLandmarker(); // Предзагрузка модели в фоне
+        fileInput.value = "";
+        if (fileInputSideCanvas) fileInputSideCanvas.value = "";
+        resetScanSession();
         if (heightInput) heightInput.value = inputs.body.height.num.value || "175";
         const bodyScanGender = document.getElementById('body-scan-gender');
         const mainGender = getMainGenderValue();
@@ -1482,18 +1551,12 @@ document.addEventListener('keydown', (e) => {
     fileInput.onchange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        lastLandmarks = null;
-        lastLandmarksSide = null;
-        lastFrontMask = null;
-        lastFrontTorsoMask = null;
-        lastSideMask = null;
-        lastRawValues = {};
-        lastHipsEstimate = null;
-        lastBodyScanResult = null;
+        resetScanResult({ clearSummary: true, redraw: true });
         const reader = new FileReader();
         reader.onload = (evt) => {
             img.onload = () => {
                 drawBodyImage();
+                setComputeButton({ visible: true, disabled: false, label: 'Вычислить' });
             };
             img.src = evt.target.result;
         };
@@ -1503,11 +1566,13 @@ document.addEventListener('keydown', (e) => {
     function onSidePhotoSelected(e) {
         const file = e.target.files[0];
         if (!file) return;
-        lastLandmarksSide = null;
-        lastSideMask = null;
+        resetScanResult({ clearSummary: true, redraw: true });
         const reader = new FileReader();
         reader.onload = (evt) => {
-            imgSide.onload = () => drawBodyImage();
+            imgSide.onload = () => {
+                drawBodyImage();
+                setComputeButton({ visible: hasFrontPhoto(), disabled: false, label: 'Вычислить' });
+            };
             imgSide.src = evt.target.result;
         };
         reader.readAsDataURL(file);
@@ -1555,9 +1620,6 @@ document.addEventListener('keydown', (e) => {
         }
     }
 
-    const loadingOverlay = document.getElementById('loading-overlay');
-    const loadingText = document.getElementById('loading-text');
-
     const MIN_WIDTH = 150;
     const ANALYZE_MAX_DIM = 512; // Разрешение для MediaPipe (отдельно от превью 280px)
 
@@ -1599,67 +1661,52 @@ document.addEventListener('keydown', (e) => {
 
     async function runPose() {
         if (isProcessing) return;
-        const instr = document.getElementById('body-scan-instruction');
         const realHeightCm = parseFloat(heightInput ? heightInput.value : inputs.body.height.num.value);
         const realWeightKg = parseFloat(weightInput ? weightInput.value : '');
         if (!realHeightCm || realHeightCm <= 0) {
-            if (instr) instr.innerText = '⚠️ Укажите рост';
-            summaryEl.textContent = "Для скана нужен рост (см).";
+            setScanValidationError('Для скана нужен рост в сантиметрах.', 'Укажите рост');
             return;
         }
         if (!realWeightKg || realWeightKg <= 0) {
-            if (instr) instr.innerText = '⚠️ Укажите вес';
-            summaryEl.textContent = "Для скана нужен вес (кг).";
+            setScanValidationError('Для скана нужен вес в килограммах.', 'Укажите вес');
             return;
         }
 
         const validFront = validatePhoto(img);
         if (!validFront.ok) {
-            if (instr) instr.innerText = '⚠️ Проверьте фото';
-            summaryEl.textContent = validFront.error;
+            setScanValidationError(validFront.error, 'Проверьте фото');
             return;
         }
         if (imgSide && imgSide.src && imgSide.complete && imgSide.naturalWidth > 0) {
             const validSide = validateSidePhoto(imgSide);
             if (!validSide.ok) {
-                if (instr) instr.innerText = '⚠️ Проверьте фото сбоку';
-                summaryEl.textContent = validSide.error;
+                setScanValidationError(validSide.error, 'Проверьте фото сбоку');
                 return;
             }
         }
 
         isProcessing = true;
-        if (btnDone) btnDone.style.display = 'none';
-        if (instr) instr.innerText = '⏳ Вычисляем...';
-        summaryEl.textContent = "Загружаем MediaPipe…";
-        if (loadingOverlay) {
-            loadingOverlay.classList.add('active');
-            if (loadingText) loadingText.textContent = 'Загружаем MediaPipe…';
-        }
+        setBodyScanInstruction('Вычисляем...');
+        setScanBusy('Загружаем модели...');
         try {
             const detector = await ensurePoseLandmarker();
-            if (loadingText) loadingText.textContent = 'Распознаём позу спереди...';
+            setScanBusy('Распознаём позу спереди...');
             if (!detector) {
-                if (instr) instr.innerText = 'Загрузите фото и нажмите кнопку';
-                summaryEl.textContent = "Не удалось загрузить MediaPipe Pose. Проверьте интернет и консоль (F12).";
-                isProcessing = false;
-                if (loadingOverlay) loadingOverlay.classList.remove('active');
+                setBodyScanInstruction('Загрузите фото и нажмите кнопку');
+                setSummary('Не удалось загрузить модуль распознавания. Проверьте интернет и попробуйте ещё раз.');
                 return;
             }
-            summaryEl.textContent = `Распознаём позу спереди (${DETECT_PASSES} прохода)...`;
+            setSummary(`Распознаём позу спереди (${DETECT_PASSES} прохода)...`);
             const pose = await detectPoseMedian(detector, img, DETECT_PASSES);
             if (!pose || pose.length === 0) {
-                if (instr) instr.innerText = 'Загрузите фото и нажмите кнопку';
-                summaryEl.textContent = "Поза не найдена. Попробуйте другое фото (человек в полный рост, фронтально).";
-                isProcessing = false;
-                if (loadingOverlay) loadingOverlay.classList.remove('active');
+                setBodyScanInstruction('Загрузите фото и нажмите кнопку');
+                setSummary('Поза не найдена. Попробуйте фото в полный рост, строго спереди.');
                 return;
             }
             lastLandmarks = pose;
             lastLandmarksSide = null;
             if (imgSide && imgSide.src && imgSide.complete && imgSide.naturalWidth > 0 && canvasSide && canvasSide.width > 0) {
-                if (loadingText) loadingText.textContent = 'Распознаём позу сбоку...';
-                summaryEl.textContent = "Распознаём позу сбоку...";
+                setScanBusy('Распознаём позу сбоку...');
                 const poseSide = await detectPoseMedian(detector, imgSide, DETECT_PASSES);
                 if (poseSide && poseSide.length > 0) lastLandmarksSide = poseSide;
             }
@@ -1671,36 +1718,23 @@ document.addEventListener('keydown', (e) => {
                     y: pts.reduce((sum, p) => sum + p.y, 0) / pts.length * targetCanvas.height,
                 };
             };
-            if (loadingText) loadingText.textContent = 'Сегментируем силуэт...';
-            summaryEl.textContent = "Сегментируем силуэт...";
+            setScanBusy('Сегментируем силуэт...');
             lastFrontMask = await buildPersonMaskForCanvas(canvas, maskAnchor(lastLandmarks, canvas));
-            if (loadingText) loadingText.textContent = 'Сегментируем части тела...';
-            summaryEl.textContent = "Сегментируем части тела...";
+            setScanBusy('Сегментируем части тела...');
             lastFrontTorsoMask = await buildBodyPartTorsoMaskForCanvas(canvas, maskAnchor(lastLandmarks, canvas));
             lastSideMask = lastLandmarksSide && canvasSide && canvasSide.width > 0
                 ? await buildPersonMaskForCanvas(canvasSide, maskAnchor(lastLandmarksSide, canvasSide))
                 : null;
-            if (document.getElementById('body-scan-instruction')) {
-                document.getElementById('body-scan-instruction').innerText = '✅ Параметры вычислены';
-            }
+            setScanBusy('Вычисляем параметры...');
+            setBodyScanInstruction('Параметры вычислены');
             applyBodyMeasurementsFromPose(lastLandmarks, lastLandmarksSide);
         } catch (err) {
-            showError({
-                title: 'Ошибка анализа тела.',
-                help: [
-                    'Проверьте, что фото в полный рост и человек хорошо виден.',
-                    'Попробуйте другое фото (ровный фон, без сильных теней).',
-                    'Если ошибка повторяется — обновите страницу.',
-                ],
-                technical: err && err.message ? err.message : String(err || ''),
-            });
-            if (document.getElementById('body-scan-instruction')) {
-                document.getElementById('body-scan-instruction').innerText = 'Загрузите фото и нажмите кнопку';
-            }
-            summaryEl.textContent = "Ошибка анализа: " + (err.message || "неизвестная ошибка");
+            console.error('Body scan failed.', err);
+            setBodyScanInstruction('Загрузите фото и нажмите кнопку');
+            setSummary('Ошибка анализа. Попробуйте другое фото или обновите страницу.');
         } finally {
             isProcessing = false;
-            if (loadingOverlay) loadingOverlay.classList.remove('active');
+            clearScanBusy();
         }
     }
 
@@ -2375,16 +2409,15 @@ document.addEventListener('keydown', (e) => {
     function renderMeasurementOverlay(overlay) {
         if (!overlay || !ctx || !canvas) return;
         drawBodyImage();
-        if (new URLSearchParams(window.location.search).has('debugBodyScan')) {
-            drawScanWindow(ctx, overlay.windows?.chest, 'окно груди');
-            drawScanWindow(ctx, overlay.windows?.waist, 'окно талии');
-            drawScanWindow(ctx, overlay.windows?.hips, 'окно бедер');
-        }
+        if (!isBodyScanDebug()) return;
+        drawScanWindow(ctx, overlay.windows?.chest, 'окно груди');
+        drawScanWindow(ctx, overlay.windows?.waist, 'окно талии');
+        drawScanWindow(ctx, overlay.windows?.hips, 'окно бедер');
         const conf = overlay.confidence || {};
         drawScanLine(ctx, overlay.chestY, overlay.chestSpan ? overlay.chestSpan.x1 : null, overlay.chestSpan ? overlay.chestSpan.x2 : null, conf.chest, 'Грудь');
         drawScanLine(ctx, overlay.waistY, overlay.waistSpan ? overlay.waistSpan.x1 : null, overlay.waistSpan ? overlay.waistSpan.x2 : null, conf.waist, 'Талия');
         drawScanLine(ctx, overlay.hipsY, overlay.hipsSpan ? overlay.hipsSpan.x1 : null, overlay.hipsSpan ? overlay.hipsSpan.x2 : null, conf.hips, 'Бёдра');
-        if (new URLSearchParams(window.location.search).has('debugBodyScan') && ctxSide && canvasSide && canvasSide.width > 0) {
+        if (ctxSide && canvasSide && canvasSide.width > 0) {
             const side = overlay.sideSpans || {};
             if (side.chest) drawScanLine(ctxSide, side.chest.y, side.chest.x1, side.chest.x2, conf.chest, 'Глубина груди');
             if (side.waist) drawScanLine(ctxSide, side.waist.y, side.waist.x1, side.waist.x2, conf.waist, 'Глубина талии');
@@ -2561,6 +2594,27 @@ document.addEventListener('keydown', (e) => {
         return lines;
     }
 
+    function hasApproximateBodyScanParts(result) {
+        const methods = result?.methods || {};
+        return Object.values(methods).some((method) => (
+            method === 'statFallback' ||
+            method === 'frontApprox' ||
+            method === 'lengthApprox'
+        ));
+    }
+
+    function getShortBodyScanWarning(result) {
+        const warnings = result?.warnings || [];
+        if (warnings.some((warning) => String(warning).includes('Руки близко'))) {
+            return 'Руки близко к корпусу, поэтому точность ниже.';
+        }
+        const sideInfo = result?.diagnostics?.side;
+        if (!sideInfo?.usable) {
+            return 'Без фото сбоку глубина тела оценена приблизительно.';
+        }
+        return '';
+    }
+
     function applyBodyMeasurementsFromPose(landmarks, landmarksSide) {
         const result = analyzeBodyScan({
             frontCanvas: canvas,
@@ -2579,8 +2633,9 @@ document.addEventListener('keydown', (e) => {
             previousHipsEstimate: lastHipsEstimate,
         });
         lastBodyScanResult = result;
+        const debugBodyScan = isBodyScanDebug();
 
-        if (new URLSearchParams(window.location.search).has('debugBodyScan')) {
+        if (debugBodyScan) {
             window.__lastBodyScanResult = result;
         }
 
@@ -2590,12 +2645,12 @@ document.addEventListener('keydown', (e) => {
 
         if (!result.ok) {
             const details = [...(result.errors || []), ...(result.warnings || [])].filter(Boolean);
-            summaryEl.textContent = details.length
+            setSummary(debugBodyScan && details.length
                 ? details.join('\n')
-                : 'Не удалось надежно рассчитать параметры по этому фото.';
+                : 'Не удалось надежно определить параметры. Попробуйте другое фото.');
             if (paramsContainer) paramsContainer.style.display = 'none';
             if (adjustHintEl) adjustHintEl.style.display = 'none';
-            if (btnCompute) btnCompute.style.display = '';
+            setComputeButton({ visible: hasFrontPhoto(), disabled: false, label: 'Вычислить' });
             if (btnDone) btnDone.style.display = 'none';
             return;
         }
@@ -2638,15 +2693,31 @@ document.addEventListener('keydown', (e) => {
         if (missingParts.length > 0) {
             messages.push(`Не удалось определить: ${missingParts.map((k) => labels[k]).join(', ')}.`);
         }
-        messages.push(...formatBodyScanReasons(result));
-        summaryEl.textContent = messages.join('\n');
+        if (debugBodyScan) {
+            messages.push(...formatBodyScanReasons(result));
+            setSummary(messages.join('\n'));
+        } else {
+            const approximate = hasApproximateBodyScanParts(result) || missingParts.length > 0 || (result.warnings?.length || 0) > 0;
+            const shortMessages = [
+                approximate
+                    ? 'Часть параметров рассчитана приблизительно. Проверьте значения.'
+                    : 'Параметры рассчитаны. Проверьте значения перед применением.'
+            ];
+            const warning = getShortBodyScanWarning(result);
+            if (warning) shortMessages.push(warning);
+            setSummary(shortMessages.join('\n'));
+        }
 
-        if (new URLSearchParams(window.location.search).has('debugBodyScan')) {
+        if (debugBodyScan) {
             console.info('[BodyScan]', result);
         }
 
         if (adjustHintEl) adjustHintEl.style.display = parts.length > 0 ? 'inline' : 'none';
-        if (btnCompute) btnCompute.style.display = parts.length > 0 ? 'none' : '';
+        setComputeButton({
+            visible: hasFrontPhoto(),
+            disabled: false,
+            label: parts.length > 0 ? 'Пересчитать' : 'Вычислить',
+        });
         if (btnDone) btnDone.style.display = parts.length > 0 ? 'block' : 'none';
     }
 

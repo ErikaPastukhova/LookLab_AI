@@ -726,6 +726,7 @@ input[name="gender-select"]:checked + span {
   gap: 16px;
   justify-content: flex-start;
   align-items: stretch;
+  position: relative;
 }
 
 .body-scan-select-wrap {
@@ -893,7 +894,42 @@ input[name="gender-select"]:checked + span {
   max-width: 280px;
   max-height: 240px;
   border-radius: 4px;
-  background: #1e293b;
+  background: transparent;
+}
+
+.body-scan-processing {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 140px;
+  border-radius: var(--radius-md);
+  background: rgba(251, 252, 247, 0.88);
+  backdrop-filter: blur(3px);
+  color: var(--color-text);
+  text-align: center;
+  pointer-events: auto;
+}
+
+.body-scan-processing[hidden] {
+  display: none;
+}
+
+.body-scan-processing .loading-spinner {
+  width: 34px;
+  height: 34px;
+  border-width: 3px;
+}
+
+.body-scan-processing span {
+  max-width: 220px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .body-scan-replace-link {
@@ -1125,6 +1161,11 @@ input[name="gender-select"]:checked + span {
   font-weight: 600 !important;
   border-radius: var(--btn-radius) !important;
   cursor: pointer !important;
+}
+
+.primary-btn:disabled {
+  opacity: 0.68;
+  cursor: wait !important;
 }
 
 .secondary-btn {
