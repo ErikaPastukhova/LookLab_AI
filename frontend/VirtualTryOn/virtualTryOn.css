@@ -238,9 +238,11 @@ html, body {
   flex-direction: column;
 }
 
-.vto-left > .vto-card,
-.vto-preview-card {
-  min-height: var(--vto-panel-h);
+@media (min-width: 901px) {
+  .vto-left > .vto-card,
+  .vto-preview-card {
+    min-height: var(--vto-panel-h);
+  }
 }
 
 .vto-card, .vto-preview-card {
@@ -805,7 +807,7 @@ html, body {
 @media (max-width: 900px) {
   .vto-catalog-grid {
     grid-template-columns: 1fr 1fr;
-    --vto-catalog-card-h: clamp(190px, 26dvh, 240px);
+    --vto-catalog-card-h: clamp(190px, 26svh, 240px);
     overflow-y: hidden;
     -webkit-overflow-scrolling: auto;
     padding-right: 0;
@@ -826,7 +828,7 @@ html, body {
 
 @media (max-width: 520px) {
   .vto-catalog-grid {
-    --vto-catalog-card-h: clamp(180px, 25dvh, 220px);
+    --vto-catalog-card-h: clamp(180px, 25svh, 220px);
   }
 }
 

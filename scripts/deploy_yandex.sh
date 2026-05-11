@@ -6,7 +6,7 @@
 #   bash graduation_project_erika_dasha/scripts/deploy_yandex.sh
 #
 # Environment:
-#   BUCKET              — Object Storage bucket (default: onlinemannequin), passed to deploy_bucket_static.sh
+#   BUCKET              — Object Storage bucket (default: www.looklab-ai.ru prod), passed to deploy_bucket_static.sh
 #   OM_BACKEND_SSH      — SSH target (default: ubuntu@111.88.254.136)
 #   OM_SSH_IDENTITY     — optional path to private key, e.g. ~/.ssh/id_ed25519
 #   DRY_RUN=1           — print actions only (frontend uses existing support; backend prints rsync/ssh)

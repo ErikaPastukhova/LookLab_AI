@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy static site files to Yandex Object Storage (bucket onlinemannequin by default).
+# Deploy static site files to Yandex Object Storage (prod bucket www.looklab-ai.ru by default).
 #
 # Run from a machine with `yc` configured. From the monorepo root:
 #   git submodule update --init --recursive
@@ -13,7 +13,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BUCKET="${BUCKET:-onlinemannequin}"
+BUCKET="${BUCKET:-www.looklab-ai.ru}"
 DRY_RUN="${DRY_RUN:-}"
 
 FILES=(

@@ -12,7 +12,7 @@
 bash scripts/deploy_bucket_static.sh
 ```
 
-Скрипт залижает нужные HTML/CSS/JS в бакет `onlinemannequin` с корректными `Content-Type` и не трогает корневой префикс `catalog/` в бакете. Полный операционный контекст — [docs/RUNBOOK_YANDEX_CLOUD.md](docs/RUNBOOK_YANDEX_CLOUD.md) (раздел 6.5).
+Скрипт заливает нужные HTML/CSS/JS в прод-бакет **`www.looklab-ai.ru`** с корректными `Content-Type` и не трогает корневой префикс `catalog/` в бакете. Другой бакет: `BUCKET=… bash scripts/deploy_bucket_static.sh`. Полный операционный контекст — [docs/RUNBOOK_YANDEX_CLOUD.md](docs/RUNBOOK_YANDEX_CLOUD.md) (раздел 6.5).
 
 Полный выкат **фронта и бэкенда** на Yandex Cloud: `bash scripts/deploy_yandex.sh` (см. runbook, раздел 6.0).
 
@@ -126,14 +126,15 @@ ssh -L 8001:10.128.0.20:8001 ubuntu@111.88.254.136
 
 ## Каталог одежды
 
-Backend загружает каталог из Object Storage (S3) при старте. Для работы необходимо настроить `CATALOG_BUCKET` и `CATALOG_OBJECT_KEY`.
+Backend загружает `catalog.json` при старте: при `STORAGE_BACKEND=s3` — из S3 по `CATALOG_BUCKET` / `CATALOG_OBJECT_KEY`; при **локальном** `STORAGE_BACKEND=local` — по **HTTPS** (публичный Object Storage или ваш сайт).
 
 ### Настройки (ENV)
 
-- `CATALOG_BUCKET`: имя бакета (например, `onlinemannequin`)
-- `CATALOG_OBJECT_KEY`: ключ объекта каталога (по умолчанию `catalog/catalog.json`)
+- `CATALOG_OBJECT_KEY`: ключ к JSON (по умолчанию `catalog/catalog.json`), обязателен.
+- `CATALOG_BUCKET`: имя бакета для **path-style** URL Yandex (`https://storage.yandexcloud.net/{bucket}/{key}`). В шаблоне [`.env.example`](graduation_project_erika_dasha/backend/.env.example) по умолчанию задан бакет **`www.looklab-ai.ru`**; для старого бакета укажите, например, `onlinemannequin`.
+- `CATALOG_HTTP_BASE_URL`: опционально, **корень сайта** без завершающего `/` (например `https://www.looklab-ai.ru`). Если задан при `STORAGE_BACKEND=local`, каталог запрашивается как `{CATALOG_HTTP_BASE_URL}/{CATALOG_OBJECT_KEY}`; `CATALOG_BUCKET` для этой загрузки не используется.
 
-Backend загружает каталог при старте. После обновления `catalog.json` требуется рестарт backend.
+После обновления `catalog.json` в хранилище требуется рестарт backend.
 
 ### Формат `catalog.json`
 
@@ -148,7 +149,7 @@ Backend загружает каталог при старте. После обн
       "category": "top",
       "categoryLabel": "Топ",
       "color": "#111827",
-      "garmentImageUrl": "https://storage.yandexcloud.net/onlinemannequin/catalog/garments/black_top.jpg"
+      "garmentImageUrl": "https://www.looklab-ai.ru/catalog/garments/black_top.jpg"
     }
   ]
 }

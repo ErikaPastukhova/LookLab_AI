@@ -15,12 +15,12 @@
 
 Высокоуровневая схема:
 
-1. Пользователь открывает сайт из `Object Storage` (бакет `onlinemannequin`).
+1. Пользователь открывает статический сайт из **Object Storage**. **Прод всегда выкатывается в бакет `www.looklab-ai.ru`** (домен `https://www.looklab-ai.ru/…`); скрипты деплоя используют его по умолчанию. Бакет **`onlinemannequin`** в облаке может оставаться как legacy/тест — не путать с текущим прод-выкатом.
 2. Frontend вызывает API Gateway `om-gate`:
    - `GET /api/v1/catalog/items` → проксируется на backend VM.
    - `POST /api/v1/tryon/jobs` → проксируется на backend VM.
 3. Backend при необходимости дергает “ensure running” endpoint, который через API Gateway вызывает Cloud Function и (best-effort) запускает GPU VM.
-4. Результаты и входные изображения лежат в Object Storage (бакет `onlinemanequine-media`), а каталог одежды — в `onlinemannequin` (`catalog/catalog.json`).
+4. Результаты и входные изображения лежат в Object Storage (бакет **`onlinemanequine-media`**). JSON каталога и картинки каталога лежат в **том бакете**, который задан на VM в `CATALOG_BUCKET` / `CATALOG_HTTP_BASE_URL` (часто **`www.looklab-ai.ru`** или path-style к бакету с тем же именем; см. `backend/.env.example`).
 
 ## 2) Структура репозитория (что где лежит)
 
@@ -39,10 +39,10 @@
   - `backend/services/*`: конфиг, storage (local/s3), каталог, провайдер AI и т.п.
   - `backend/.env.example`: шаблон переменных окружения.
   - `backend/requirements.txt`: зависимости.
-- **`cloud-functions/`**: функции для управления GPU VM.
+- **`cloud-functions/`** (если есть в checkout): функции для управления GPU VM.
   - `cloud-functions/om-ensure-running/index.py`: “ensure running” (старт GPU VM + health probe).
   - `cloud-functions/om-gpu-stop/index.py`: “idle stop” (останов GPU VM при простое).
-- **`om-gate-openapi.yaml`**: спецификация API Gateway (OpenAPI с `x-yc-apigateway-integration`).
+- **`om-gate-openapi.yaml`** (если есть в checkout): спецификация API Gateway (OpenAPI с `x-yc-apigateway-integration`). Фактическая спека в облаке — всегда снимать через `yc serverless api-gateway get-spec` (см. §3.3 и §6.7).
 - **`google-apps-script/`**: скрипт для лид-формы → Google Sheets.
 
 ## 3) Инвентаризация Yandex Cloud (как сейчас развернуто)
@@ -63,6 +63,7 @@
 - **status**: RUNNING
 - **private IP**: `10.128.0.14`
 - **public NAT IP**: `111.88.254.136`
+- **platform** (по `yc compute instance get`): `standard-v4a`
 - **OS**: Ubuntu 24.04.4 LTS (по диску/фактам на VM)
 
 #### GPU VM
@@ -80,7 +81,7 @@
 
 - **name**: `om-gate`
 - **domain**: `d5dnmn8hm7jc5rsrfis2.nkhmighe.apigw.yandexcloud.net`
-- **spec**: соответствует `graduation_project_erika_dasha/om-gate-openapi.yaml`
+- **spec**: в репозитории ориентир — `graduation_project_erika_dasha/om-gate-openapi.yaml` (если файл в checkout); **источник истины в облаке** — вывод `yc serverless api-gateway get-spec om-gate --folder-id b1gmkcue20ntomp1f117`.
 
 Ключевые маршруты (важно для отладки):
 - `POST /gpu/ensure_running` → Cloud Function `om-ensure-running`
@@ -104,13 +105,19 @@
 
 ### 3.5 Object Storage (бакеты и ключи)
 
-#### Бакет “сайт + каталог”
-- **bucket**: `onlinemannequin`
-- в корне лежат: `index.html`, `landing.css`, `landing.js`, `script.js`, `style.css`, `demo.html`, `try.html`
+В папке облака зафиксированы как минимум три релевантных бакета (проверка: `yc storage bucket list`):
+
+#### Бакет `www.looklab-ai.ru` (прод-сайт / каталог Looklab — **дефолт выката**)
+- **bucket**: `www.looklab-ai.ru` (имя бакета совпадает с доменом сайта).
+- Скрипт [`scripts/deploy_bucket_static.sh`](../scripts/deploy_bucket_static.sh) по умолчанию заливает сюда (`BUCKET` по умолчанию = `www.looklab-ai.ru`). Полный выкат: [`scripts/deploy_yandex.sh`](../scripts/deploy_yandex.sh) вызывает тот же скрипт без переопределения бакета.
+- Типичная раскладка ключей: корень сайта + `catalog/catalog.json`, `catalog/garments/*`, `VirtualTryOn/*`, и т.д.
+- В корне лежат: `index.html`, `landing.css`, `request-form.js`, `script.js`, `style.css`, `demo.html`, `try.html`, и т.д. (полный список — массив `FILES` в скрипте).
 - **3D модели онлайн-манекена**: `assets/models/*.glb`
 - **VirtualTryOn**: `VirtualTryOn/virtual-try-on.html`, `VirtualTryOn/virtualTryOn.js`, `VirtualTryOn/virtualTryOn.css`, и т.д.
-- **каталог одежды**: `catalog/catalog.json`
-- **картинки одежды**: `catalog/garments/*`
+
+#### Бакет `onlinemannequin` (legacy / не прод по умолчанию)
+- **bucket**: `onlinemannequin`
+- Исторически использовался как цель деплоя; **текущий прод катим только в `www.looklab-ai.ru`**. Если нужен выкат сюда: `BUCKET=onlinemannequin bash scripts/deploy_bucket_static.sh`.
 
 #### Бакет “медиа try-on”
 - **bucket**: `onlinemanequine-media`
@@ -135,6 +142,47 @@
 - Network LB: нет
 - Application LB: нет
 - Managed PostgreSQL / Redis: нет
+
+### 3.8 Сверка кода в репозитории с задеплоенной статикой
+
+Цель: убедиться, что объекты в Object Storage совпадают с файлами в **текущем** checkout `graduation_project_erika_dasha/` (или с конкретным коммитом `git`).
+
+**Какие ключи считаются “фронтом деплоя”** — ровно список из [`scripts/deploy_bucket_static.sh`](../scripts/deploy_bucket_static.sh) (массив `FILES`: `index.html`, `style.css`, `script.js`, `demo.html`, `VirtualTryOn/*`, `ui/*`, `assets/models/*.glb`, …). Скрипт **не** заливает объекты с префиксом `catalog/*` в корне бакета (каталог правьте отдельно).
+
+**Какой бакет сравнивать** — по умолчанию **`www.looklab-ai.ru`** (прод). Для legacy-сравнения задайте `BUCKET=onlinemannequin`. Ниже `BUCKET` — переменная shell.
+
+Публичное чтение (path-style):
+
+`https://storage.yandexcloud.net/${BUCKET}/<key>`
+
+Пример: сравнить хеш локального `frontend/style.css` с объектом `style.css` в бакете:
+
+```bash
+cd graduation_project_erika_dasha
+export BUCKET="${BUCKET:-www.looklab-ai.ru}"   # прод; legacy: onlinemannequin
+
+echo "Local:" && shasum -a 256 frontend/style.css
+echo "Bucket:" && curl -fsS "https://storage.yandexcloud.net/${BUCKET}/style.css" | shasum -a 256
+
+# то же для коммита в git (без локальных правок на диске):
+git show HEAD:frontend/style.css | shasum -a 256
+```
+
+Метаданные объекта в бакете (дата выката, ETag):
+
+```bash
+curl -fsSI "https://storage.yandexcloud.net/${BUCKET}/style.css" | sed -n '1,20p'
+```
+
+Каталог `catalog/catalog.json`: сравните с тем бакетом, откуда backend его читает (ENV на `om-backend`), например:
+
+```bash
+yc storage s3api get-object --bucket "${BUCKET}" --key catalog/catalog.json --body /tmp/catalog-remote.json
+shasum -a 256 /tmp/catalog-remote.json
+# vs локальный файл, если держите эталон в репозитории/артефакте
+```
+
+Если хеши расходятся — либо не выкатывали после коммита, либо смотрите другой бакет/ветку.
 
 ## 4) Как работать с `yc` (CLI) — минимум для агента
 
@@ -165,19 +213,23 @@ yc serverless api-gateway get-spec om-gate --folder-id b1gmkcue20ntomp1f117
 # Object Storage buckets
 yc storage bucket list
 
-# Список объектов в бакете (через s3api)
-yc storage s3api list-objects --bucket onlinemannequin --delimiter / --max-keys 1000
-yc storage s3api list-objects --bucket onlinemannequin --prefix catalog/ --max-keys 1000
+# Список объектов в бакете (через s3api); прод — www.looklab-ai.ru
+yc storage s3api list-objects --bucket www.looklab-ai.ru --delimiter / --max-keys 1000
+yc storage s3api list-objects --bucket www.looklab-ai.ru --prefix catalog/ --max-keys 1000
+# при необходимости legacy:
+# yc storage s3api list-objects --bucket onlinemannequin --delimiter / --max-keys 1000
 ```
 
 ### 4.3 Как выгрузить/залить объект в Object Storage
 
 ```bash
-# Скачать объект в stdout (например, посмотреть каталог)
-yc storage s3api get-object --bucket onlinemannequin --key catalog/catalog.json --body /tmp/catalog.json
+export BUCKET="${BUCKET:-www.looklab-ai.ru}"   # прод; legacy: onlinemannequin
 
-# Загрузить файл (обновить каталог/фронт) — ОСТОРОЖНО: это перезапишет объект по ключу
-yc storage s3api put-object --bucket onlinemannequin --key catalog/catalog.json --body ./catalog.json
+# Скачать объект (например, посмотреть каталог)
+yc storage s3api get-object --bucket "${BUCKET}" --key catalog/catalog.json --body /tmp/catalog.json
+
+# Загрузить файл (обновить каталог/фронт) — ОСТОРОЖНО: перезапись по ключу
+yc storage s3api put-object --bucket "${BUCKET}" --key catalog/catalog.json --body ./catalog.json
 ```
 
 > Для сайта обычно загружают сразу набор статических файлов (index.html/css/js/VirtualTryOn/*).  
@@ -251,7 +303,7 @@ bash graduation_project_erika_dasha/scripts/deploy_yandex.sh
 
 Скрипт: [scripts/deploy_yandex.sh](../scripts/deploy_yandex.sh) — по очереди вызывает выкат статики в бакет (см. [deploy_bucket_static.sh](../scripts/deploy_bucket_static.sh)) и доставку `backend/` на VM `om-backend` с `pip install` и `systemctl restart om-backend`.
 
-Переменные окружения: `BUCKET` (по умолчанию `onlinemannequin`), `OM_BACKEND_SSH` (по умолчанию `ubuntu@111.88.254.136`), `OM_SSH_IDENTITY` (опционально путь к ключу), `DRY_RUN=1` (только печать шагов). Флаги: `--frontend-only` (только бакет), `--backend-only` (только VM).
+Переменные окружения: `BUCKET` (по умолчанию **`www.looklab-ai.ru`** — прод; для legacy: `BUCKET=onlinemannequin`), `OM_BACKEND_SSH` (по умолчанию `ubuntu@111.88.254.136`), `OM_SSH_IDENTITY` (опционально путь к ключу), `DRY_RUN=1` (только печать шагов). Флаги: `--frontend-only` (только бакет), `--backend-only` (только VM).
 
 ### 6.1 Перезапуск backend
 
@@ -296,15 +348,16 @@ sudo systemctl restart om-backend
 
 ### 6.4 Обновить каталог одежды
 
-Каталог в Object Storage:
-- bucket: `onlinemannequin`
-- key: `catalog/catalog.json`
+Каталог в Object Storage (bucket должен совпадать с тем, откуда backend читает JSON — см. `/home/daryohas/backend/.env` на VM или `CATALOG_*` в репозитории):
+- типичный key: `catalog/catalog.json`
+- прод-каталог и сайт: **`www.looklab-ai.ru`**; legacy при необходимости: `onlinemannequin`
 
 Обновление:
 1) залить новый `catalog.json`:
 
 ```bash
-yc storage s3api put-object --bucket onlinemannequin --key catalog/catalog.json --body ./catalog.json
+export BUCKET="${BUCKET:-www.looklab-ai.ru}"
+yc storage s3api put-object --bucket "${BUCKET}" --key catalog/catalog.json --body ./catalog.json
 ```
 
 2) **перезапустить backend**, потому что он грузит каталог при старте:
@@ -315,7 +368,7 @@ ssh ubuntu@111.88.254.136 'sudo systemctl restart om-backend'
 
 ### 6.5 Обновить фронтенд (статический сайт)
 
-Фронт лежит в бакете `onlinemannequin` (в корне + `VirtualTryOn/*` + `ui/*`).
+Фронт лежит в Object Storage: **по умолчанию выкат идёт в прод-бакет `www.looklab-ai.ru`** (те же ключи в корне, что и у статики на сайте).
 
 **Рекомендуемый способ:** скрипт из репозитория проекта (после актуального checkout подмодуля / клона):
 
@@ -323,6 +376,8 @@ ssh ubuntu@111.88.254.136 'sudo systemctl restart om-backend'
 # из корня монорепозитория, если `graduation_project_erika_dasha` — подмодуль:
 git submodule update --init --recursive
 bash graduation_project_erika_dasha/scripts/deploy_bucket_static.sh
+# редко — выкат в legacy-бакет:
+# BUCKET=onlinemannequin bash graduation_project_erika_dasha/scripts/deploy_bucket_static.sh
 ```
 
 Скрипт: [scripts/deploy_bucket_static.sh](../scripts/deploy_bucket_static.sh) — заливает полный набор статики (включая `request-form.js` и модели `assets/models/*.glb`), выставляет **`Content-Type`** (`text/html`, `text/css`, `application/javascript` с `charset=utf-8`, `model/gltf-binary` для `.glb`), чтобы браузер не предлагал «сохранить страницу» вместо отображения. Ключи в бакете с префиксом **`catalog/`** (корневой каталог одежды) скрипт **не трогает**; путь `VirtualTryOn/catalog/categories.js` разрешён.
@@ -330,7 +385,8 @@ bash graduation_project_erika_dasha/scripts/deploy_bucket_static.sh
 Ручная заливка одного файла (при необходимости задайте `--content-type`):
 
 ```bash
-yc storage s3api put-object --bucket onlinemannequin --key index.html --body ./index.html --content-type "text/html; charset=utf-8"
+export BUCKET="${BUCKET:-www.looklab-ai.ru}"
+yc storage s3api put-object --bucket "${BUCKET}" --key index.html --body ./index.html --content-type "text/html; charset=utf-8"
 ```
 
 ### 6.6 GPU VM старт/стоп (ручной контроль)
@@ -370,8 +426,8 @@ yc serverless api-gateway get-spec om-gate --folder-id b1gmkcue20ntomp1f117
 ## 7) Быстрая шпаргалка: “если что-то сломалось”
 
 - **Не открывается сайт**:
-  - проверить, что нужные файлы реально лежат в бакете `onlinemannequin` (и что bucket настроен как website, если используете website endpoint)
-  - проверить, что `index.html` обновлен и браузер не держит кеш
+  - проверить, что нужные файлы лежат в **прод-бакете `www.looklab-ai.ru`** (или в том бакете, который реально привязан к домену в CNAME/website), и что bucket настроен как website, если используете website endpoint
+  - сверить выкат с репозиторием (§3.8); проверить, что `index.html` обновлен и браузер не держит кеш
 
 - **API не отвечает**:
   - проверить `om-backend`:
@@ -382,8 +438,8 @@ yc serverless api-gateway get-spec om-gate --folder-id b1gmkcue20ntomp1f117
   - проверить API Gateway spec (`yc serverless api-gateway get-spec ...`) и что прокси идет на `10.128.0.14:8000`
 
 - **Каталог пустой/ошибка каталога**:
-  - проверить наличие `catalog/catalog.json` в `onlinemannequin`
-  - проверить, что backend настроен на S3 чтение (ENV `CATALOG_BUCKET`, `CATALOG_OBJECT_KEY`, плюс `STORAGE_BACKEND=s3` и S3 креды/endpoint если используется boto3)
+  - проверить наличие `catalog/catalog.json` в **бакете из ENV** (`CATALOG_BUCKET` / `CATALOG_HTTP_BASE_URL` на VM — часто `www.looklab-ai.ru`)
+  - при `STORAGE_BACKEND=s3` на VM: `CATALOG_BUCKET`, `CATALOG_OBJECT_KEY`, S3 креды и endpoint; при чтении по HTTPS из публичного URL — см. `backend/.env.example`
   - перезапустить backend после обновления каталога
 
 - **Try-on не генерируется**:
