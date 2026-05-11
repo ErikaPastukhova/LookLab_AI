@@ -479,6 +479,10 @@
           </div>
           <input type="file" id="body-image-side-upload-canvas" accept="image/*" style="position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none;">
         </label>
+        <div id="body-scan-processing" class="body-scan-processing" hidden aria-live="polite" aria-busy="false">
+          <div class="loading-spinner" aria-hidden="true"></div>
+          <span id="body-scan-processing-text">Анализируем фото...</span>
+        </div>
       </div>
 
       <div class="body-scan-toolbar" id="body-scan-toolbar" style="display: none;">
@@ -518,12 +522,6 @@
         </div>
     </div>
   </div>
-</div>
-
-<!-- Оверлей загрузки при анализе тела -->
-<div id="loading-overlay" class="loading-overlay">
-  <div class="loading-spinner"></div>
-  <span id="loading-text">Анализируем позу...</span>
 </div>
   
   <!-- Scripts: keep after modals so scan UI is present -->
