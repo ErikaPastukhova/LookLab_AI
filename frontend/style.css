@@ -20,6 +20,7 @@
   --btn-radius: 999px;
   --font-sans: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'SF Mono', 'Consolas', monospace;
+  --demo-topbar-h: 56px;
 }
 
 /* --- БАЗОВЫЕ СТИЛИ --- */
@@ -1227,9 +1228,66 @@ input[name="gender-select"]:checked + span {
   to { transform: rotate(360deg); }
 }
 
-/* demo.html: hide mobile header on wide viewports (no mobile rules apply there) */
+/* demo.html: top bar on wide viewports (same pattern as mobile / VTO header) */
 @media (min-width: 1025px) {
   .mobile-topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--demo-topbar-h);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px;
+    z-index: 1900;
+    background: rgba(255, 255, 255, 0.92);
+    border-bottom: 1px solid rgba(216, 221, 208, 1);
+    backdrop-filter: blur(12px);
+  }
+
+  .mobile-topbar-back {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    font-weight: 900;
+    color: var(--color-primary);
+    border: 1px solid #d8e2c8;
+    background: #eef4dd;
+    border-radius: var(--btn-radius);
+  }
+
+  .mobile-topbar-title {
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0;
+    font-size: 16px;
+    line-height: 1.1;
+    color: var(--color-text);
+    padding: 0 56px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #canvas-container {
+    top: var(--demo-topbar-h);
+  }
+
+  #left-panel,
+  #ui-panel {
+    top: calc(14px + var(--demo-topbar-h));
+  }
+
+  .btn-exit-demo {
     display: none;
   }
 }
@@ -1274,7 +1332,7 @@ input[name="gender-select"]:checked + span {
     top: 0;
     left: 0;
     right: 0;
-    height: calc(56px + env(safe-area-inset-top));
+    height: calc(var(--demo-topbar-h) + env(safe-area-inset-top));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1318,7 +1376,7 @@ input[name="gender-select"]:checked + span {
   }
 
   #canvas-container {
-    top: calc(56px + env(safe-area-inset-top));
+    top: calc(var(--demo-topbar-h) + env(safe-area-inset-top));
   }
 
   #left-panel {
