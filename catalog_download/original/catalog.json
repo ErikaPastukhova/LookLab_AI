@@ -1,0 +1,139 @@
+{
+  "items": [
+    {
+      "id": "black-top-01",
+      "name": "Черный топ",
+      "category": "tees_tops",
+      "categoryLabel": "Футболки и топы",
+      "gender": "female",
+      "color": "#111827",
+      "garmentImageUrl": "https://storage.yandexcloud.net/www.looklab-ai.ru/catalog/garments/black_top.jpg"
+    },
+    {
+      "id": "polka-tank-01",
+      "name": "Топ в горошек",
+      "category": "tees_tops",
+      "categoryLabel": "Футболки и топы",
+      "gender": "female",
+      "color": "#111827",
+      "garmentImageUrl": "https://storage.yandexcloud.net/www.looklab-ai.ru/catalog/garments/Polka_Tank.jpg"
+    },
+    {
+      "id": "tshirt-male-01",
+      "name": "Футболка в полоску",
+      "category": "tees_tops",
+      "categoryLabel": "Футболки",
+      "gender": "male",
+      "color": "#111827",
+      "garmentImageUrl": "https://storage.yandexcloud.net/www.looklab-ai.ru/catalog/garments/tshirt.jpg"
+    },
+    {
+      "id": "tshirt-male-02",
+      "name": "Серая футболка",
+      "category": "tees_tops",
+      "categoryLabel": "Футболки",
+      "gender": "male",
+      "color": "#6B7280",
+      "garmentImageUrl": "https://storage.yandexcloud.net/www.looklab-ai.ru/catalog/garments/grey_tshirt.jpeg"
+    },
+    {
+      "id": "blue-jeans-male-01",
+      "name": "Джинсы",
+      "category": "pants",
+      "categoryLabel": "Штаны",
+      "gender": "male",
+      "color": "#1F3A8A",
+      "garmentImageUrl": "https://storage.yandexcloud.net/www.looklab-ai.ru/catalog/garments/blue_jeans.jpeg"
+    },
+    {
+      "id": "shorts-male-01",
+      "name": "Шорты",
+      "category": "pants",
+      "categoryLabel": "Штаны",
+      "gender": "male",
+      "color": "#6B7280",
+      "garmentImageUrl": "https://storage.yandexcloud.net/www.looklab-ai.ru/catalog/garments/shorts.jpg"
+    },
+    {
+      "id": "brown-sweater-male-01",
+      "name": "Коричневый свитер",
+      "category": "sweaters",
+      "categoryLabel": "Свитер",
+      "gender": "male",
+      "color": "#7C4A2D",
+      "garmentImageUrl": "https://storage.yandexcloud.net/www.looklab-ai.ru/catalog/garments/braun_sweater.jpeg"
+    },
+    {
+      "id": "rose-pants-01",
+      "name": "Розовые брюки",
+      "category": "pants",
+      "categoryLabel": "Штаны",
+      "gender": "female",
+      "color": "#F4B6C2",
+      "garmentImageUrl": "https://storage.yandexcloud.net/www.looklab-ai.ru/catalog/garments/rose_pants.jpeg"
+    },
+    {
+      "id": "polka-dress-01",
+      "name": "Платье в горошек",
+      "category": "dresses",
+      "categoryLabel": "Платья",
+      "gender": "female",
+      "color": "#111827",
+      "garmentImageUrl": "https://storage.yandexcloud.net/www.looklab-ai.ru/catalog/garments/polka_dress.jpg"
+    },
+    {
+      "id": "black-jeans-01",
+      "name": "Черные джинсы",
+      "category": "pants",
+      "categoryLabel": "Штаны",
+      "gender": "female",
+      "color": "#374151",
+      "garmentImageUrl": "https://storage.yandexcloud.net/www.looklab-ai.ru/catalog/garments/black_jeans.jpeg"
+    },
+    {
+      "id": "jeans-skirt-01",
+      "name": "Джинсовая юбка",
+      "category": "skirts",
+      "categoryLabel": "Юбки",
+      "gender": "female",
+      "color": "#1F3A8A",
+      "garmentImageUrl": "https://storage.yandexcloud.net/www.looklab-ai.ru/catalog/garments/jeans_skirt.jpeg"
+    },
+    {
+      "id": "green-skirt-01",
+      "name": "Зелёная юбка",
+      "category": "skirts",
+      "categoryLabel": "Юбки",
+      "gender": "female",
+      "color": "#16A34A",
+      "garmentImageUrl": "https://storage.yandexcloud.net/www.looklab-ai.ru/catalog/garments/green_skirt.jpeg"
+    },
+    {
+      "id": "blue-skirt-01",
+      "name": "Синяя юбка",
+      "category": "skirts",
+      "categoryLabel": "Юбки",
+      "gender": "female",
+      "color": "#2563EB",
+      "garmentImageUrl": "https://storage.yandexcloud.net/www.looklab-ai.ru/catalog/garments/blue_skirt.jpeg"
+    },
+    {
+      "id": "longsleeve-01",
+      "name": "Лонгслив",
+      "category": "tees_tops",
+      "categoryLabel": "Футболки и топы",
+      "gender": "female",
+      "color": "#CDB79E",
+      "garmentImageUrl": "https://storage.yandexcloud.net/www.looklab-ai.ru/catalog/garments/longsleeve.jpeg"
+    },
+    {
+      "id": "shirt-01",
+      "name": "Рубашка",
+      "category": "shirts",
+      "categoryLabel": "Рубашки",
+      "gender": "unisex",
+      "color": "#E5E7EB",
+      "garmentImageUrl": "https://storage.yandexcloud.net/www.looklab-ai.ru/catalog/garments/shirt.jpg"
+    }
+  ]
+}
