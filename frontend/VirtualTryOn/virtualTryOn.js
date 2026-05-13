@@ -329,8 +329,8 @@ function getGenerationMessage(elapsedMs) {
     generationPhase === 'running'
       ? [
           'Генерируем примерку… Обычно это занимает до минуты.',
-          'Генерация всё ещё идёт… Пожалуйста, подождите.',
-          'Почти готово… Ещё немного.',
+          'Генерация все еще идет… Пожалуйста, подождите.',
+          'Почти готово… Еще немного.',
         ]
       : [
           'Подготавливаем генерацию…',
@@ -341,7 +341,7 @@ function getGenerationMessage(elapsedMs) {
   const text = base[Math.min(bucket, base.length - 1)];
 
   if (elapsedMs >= 60_000) {
-    return `${text} Извините за долгое ожидание — мы всё ещё работаем над результатом.`;
+    return `${text} Уже дольше минуты — скоро.`;
   }
   return text;
 }
