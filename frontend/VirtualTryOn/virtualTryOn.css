@@ -779,6 +779,15 @@ html, body {
   flex-direction: column;
 }
 
+/* Mobile: parent card is height:auto, so the empty grid would collapse to 0
+   and the absolutely-positioned loader would spill outside the card.
+   Reserve room for a 2-row catalog viewport. */
+@media (max-width: 900px) {
+  .vto-catalog-wrap {
+    min-height: calc(var(--vto-catalog-card-h) * 2 + var(--vto-catalog-gap));
+  }
+}
+
 .vto-catalog-loader {
   position: absolute;
   inset: 0;
@@ -804,10 +813,78 @@ html, body {
   font-weight: 900;
 }
 
+/* When skeletons are rendered, demote the overlay loader to a screen-reader-only
+   live region so we don't double up on visual feedback. */
+.vto-catalog-wrap--loading > .vto-catalog-loader {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  background: transparent;
+  inset: auto;
+}
+
+.vto-item-card.vto-item-card--skeleton {
+  cursor: default;
+  pointer-events: none;
+  background: #fff;
+  border: 1px solid var(--vto-color-border);
+}
+
+.vto-item-card.vto-item-card--skeleton:hover {
+  border-color: var(--vto-color-border);
+}
+
+.vto-item-card--skeleton .vto-item-image-wrap--skeleton,
+.vto-item-card--skeleton .vto-item-name--skeleton {
+  background-color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    rgba(15, 23, 42, 0.04) 0%,
+    rgba(15, 23, 42, 0.10) 50%,
+    rgba(15, 23, 42, 0.04) 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: vto-skeleton-shimmer 1.4s linear infinite;
+  border-radius: 8px;
+}
+
+.vto-item-card--skeleton .vto-item-name--skeleton {
+  height: 12px;
+  width: 60%;
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
+@keyframes vto-skeleton-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vto-item-card--skeleton .vto-item-image-wrap--skeleton,
+  .vto-item-card--skeleton .vto-item-name--skeleton {
+    animation: none;
+    background-image: linear-gradient(
+      90deg,
+      rgba(15, 23, 42, 0.06),
+      rgba(15, 23, 42, 0.06)
+    );
+  }
+}
+
 @media (max-width: 900px) {
+  :root {
+    --vto-catalog-card-h: clamp(190px, 26svh, 240px);
+  }
   .vto-catalog-grid {
     grid-template-columns: 1fr 1fr;
-    --vto-catalog-card-h: clamp(190px, 26svh, 240px);
     overflow-y: hidden;
     -webkit-overflow-scrolling: auto;
     padding-right: 0;
@@ -827,7 +904,7 @@ html, body {
 }
 
 @media (max-width: 520px) {
-  .vto-catalog-grid {
+  :root {
     --vto-catalog-card-h: clamp(180px, 25svh, 220px);
   }
 }

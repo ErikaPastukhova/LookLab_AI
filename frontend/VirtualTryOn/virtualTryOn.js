@@ -240,11 +240,68 @@ function setUploading(isUploading) {
   elements.statusUploading.hidden = !isUploading;
 }
 
+function skeletonCountForViewport() {
+  // 2x2 visible viewport works for both mobile (PAGE_SIZE_MOBILE = 4)
+  // and the desktop "2x2 visible" catalog viewport.
+  return 4;
+}
+
+function renderCatalogSkeletons(count) {
+  if (!elements.catalog) return;
+  elements.catalog.innerHTML = '';
+  elements.catalog.classList.add('vto-catalog-grid--loading');
+
+  for (let i = 0; i < count; i += 1) {
+    const card = document.createElement('div');
+    card.className = 'vto-item-card vto-item-card--skeleton';
+    card.setAttribute('aria-hidden', 'true');
+
+    const imageWrap = document.createElement('div');
+    imageWrap.className = 'vto-item-image-wrap vto-item-image-wrap--skeleton';
+
+    const name = document.createElement('div');
+    name.className = 'vto-item-name vto-item-name--skeleton';
+
+    card.appendChild(imageWrap);
+    card.appendChild(name);
+    elements.catalog.appendChild(card);
+  }
+}
+
+function clearCatalogSkeletons() {
+  if (!elements.catalog) return;
+  elements.catalog.classList.remove('vto-catalog-grid--loading');
+  // Defensive: if a fetch error path skips renderCatalog, drop leftover skeletons
+  // so the user doesn't see them shimmering indefinitely.
+  for (const node of elements.catalog.querySelectorAll('.vto-item-card--skeleton')) {
+    node.remove();
+  }
+}
+
+function isCatalogEmpty() {
+  if (!elements.catalog) return true;
+  // Empty in the data sense: either no children or only skeleton placeholders.
+  const hasReal = elements.catalog.querySelector('.vto-item-card:not(.vto-item-card--skeleton)');
+  return !hasReal;
+}
+
 function setCatalogLoading(isLoading) {
   if (elements.catalogLoader) elements.catalogLoader.hidden = !isLoading;
-  if (elements.catalogWrap) elements.catalogWrap.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+  if (elements.catalogWrap) {
+    elements.catalogWrap.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+    elements.catalogWrap.classList.toggle('vto-catalog-wrap--loading', !!isLoading && isCatalogEmpty());
+  }
+
+  if (isLoading && isCatalogEmpty()) {
+    renderCatalogSkeletons(skeletonCountForViewport());
+  } else if (!isLoading) {
+    clearCatalogSkeletons();
+  }
+
   if (elements.catalog) {
-    elements.catalog.style.opacity = isLoading ? '0.45' : '';
+    // Skeletons already convey loading; don't dim them. Only dim real items.
+    const hasSkeletons = elements.catalog.classList.contains('vto-catalog-grid--loading');
+    elements.catalog.style.opacity = isLoading && !hasSkeletons ? '0.45' : '';
     elements.catalog.style.pointerEvents = isLoading ? 'none' : '';
   }
   if (elements.catalogPagination) elements.catalogPagination.style.pointerEvents = isLoading ? 'none' : '';
